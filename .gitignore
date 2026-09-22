@@ -1,0 +1,17 @@
+.eolia_tokens.json
+pkce_login.sh
+.scratch_*
+.tools/
+
+# Decompiled proprietary third-party APK and its raw binary -- kept local-only,
+# not pushed to GitHub even in a private repo (copyright applies regardless of visibility).
+code/
+*.apk
+*.apk.jadx
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
