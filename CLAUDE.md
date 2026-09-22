@@ -176,25 +176,64 @@ this repo as a design doc if that plan file isn't available in a future session)
   code extraction (foolproof step-by-step instructions baked into the form) as the
   zero-assumptions primary path — explicitly **not** relying on any one-time OS/browser
   customization, since that doesn't generalize past one specific machine.
-- **Code written** (all at `custom_components/eolia/`, Python-syntax-checked but **not yet
-  runtime-tested against real Home Assistant** — that resumes on europa, which already has HA
-  installed; deliberately did not pip-install `homeassistant`/pytest harness on this laptop):
-  `const.py`, `exceptions.py`, `models.py`, `auth.py`, `api.py`, `coordinator.py`,
-  `config_flow.py`, `entity.py`, `climate.py`, `select.py`, `sensor.py`, `switch.py`,
-  `__init__.py`, `manifest.json`, `strings.json`/`translations/en.json`. Fixtures from real
-  captured traffic at `tests/fixtures/` (`status_response.json`, `control_request.json`,
-  `control_response.json`, `devices_response.json`) — no test files written yet.
+- **Code written** (all at `custom_components/eolia/`): `const.py`, `exceptions.py`,
+  `models.py`, `auth.py`, `api.py`, `coordinator.py`, `config_flow.py`, `entity.py`,
+  `climate.py`, `select.py`, `sensor.py`, `switch.py`, `__init__.py`, `manifest.json`,
+  `strings.json`/`translations/en.json`. Fixtures from real captured traffic at
+  `tests/fixtures/` (`status_response.json`, `control_request.json`, `control_response.json`,
+  `devices_response.json`). **Unit-tested and green** as of 2026-09-22 (61 tests via a local
+  `.venv` + `pytest-homeassistant-custom-component` — see the "unit test suite" update in the
+  Status section above) but **still not runtime-tested against a real, running Home
+  Assistant** (config flow through an actual UI, real entity registration, etc.) — that part
+  still resumes on europa, which already has HA installed. See "Next step" above.
 - **Provisional/unconfirmed values to validate on real hardware once testable on europa**:
   `wind_volume`/`wind_direction` level ranges (guessed `0–5`, only `3` ever observed live),
   temperature step (guessed `1.0°C`, the one live capture doesn't disambiguate 0.5 vs 1.0),
   the `hvac_mode` bucket table for the less common `operation_mode` values (SmellCare,
   NanoexCleaning, AutoTempControl, etc. — bucketed by best guess, not confirmed against real
   device behavior).
-- **Next step**: on europa, set up `pytest-homeassistant-custom-component` (or just symlink
-  `custom_components/eolia` into a real HA config and drive the actual config flow), run
-  through the real login flow, and validate every entity against the real device — see the
-  plan file's "Testing plan" section for the intended structure (unit tests with the
-  `tests/fixtures/*.json` fixtures already captured, plus a manual smoke test).
+- **Update, 2026-09-22 — unit test suite written and green on the laptop.** Reversed the
+  earlier "don't install the harness on this laptop" call from last session: a local
+  `.venv/` (gitignored) with `pytest-homeassistant-custom-component` (pulls in
+  `homeassistant==2025.1.4`) is safe, local-only, and doesn't touch europa, so it made more
+  sense to just do it than wait. 61 tests across `tests/test_models.py`, `test_climate.py`,
+  `test_coordinator.py`, `test_auth.py`, `test_api.py`, `test_config_flow.py` — all green,
+  confirmed stable across repeated runs. Covers the two "highest-value" tests
+  PHASE1_PLAN.md called out (full `operation_mode` → `hvac_mode`/`preset_mode` table both
+  directions; PUT-body regression asserting `applianceId`/`humidity` never appear and
+  `silence_control` always does), plus auth token exchange/refresh, the `X-Eolia-Date`
+  JST-regardless-of-host-tz header, `E-21291-00002`/`00007` error mapping, the 401-retry
+  path, and the config flow's DevTools-pasted-URL code extraction. To reproduce:
+  `source .venv/bin/activate && python -m pytest -q` (venv already set up in this repo).
+  Read through every component file first (const/models/auth/api/coordinator/entity/
+  climate/select/sensor/switch/config_flow/__init__) — no bugs found, matches
+  PHASE1_PLAN.md's design faithfully.
+  - **One real environmental gotcha worth remembering if it resurfaces**: a single test
+    that raises through a real (mocked) HTTP call intermittently failed *teardown only*
+    (test logic itself always passed) with a `pytest_homeassistant_custom_component`
+    thread-leak false positive. Root cause fully traced: `pycares` (aiodns's backend,
+    which HA's `aiohttp_client` helper hardcodes) keeps one process-global background
+    thread that starts lazily the first time *any* `Channel` object is garbage-collected
+    anywhere in the process — not when created — so its appearance in
+    `threading.enumerate()` is GC-timing-dependent and can land on whichever test happens
+    to be running. Fixed at the root in `tests/conftest.py`
+    (`_prime_pycares_shutdown_thread`, session-scoped autouse): construct-and-drop a real
+    `AsyncResolver` in a throwaway loop before any test's thread-leak snapshot runs.
+    Confirmed stable across 5+ repeated full-suite runs after the fix. If a similar
+    single-test-teardown-only thread-leak flake shows up again, check this first before
+    re-deriving it from scratch.
+  - Not yet automated: a full `config_flow` integration test driving the actual HA flow
+    manager (menu → browser_pkce/paste_refresh_token → entry creation/reauth) end-to-end —
+    PHASE1_PLAN.md's testing plan treats that as covered by the manual smoke test (§5) on
+    europa instead, not as an automated unit test; only the flow's pure
+    `_extract_authorization_code` parser is unit-tested here.
+- **Next step**: on europa, run the manual smoke test — symlink `custom_components/eolia`
+  into a real HA config (or reuse this repo's `.venv` setup for a throwaway `hass -c
+  ./config`), drive the actual config flow through the UI (same manual copy-paste PKCE
+  method), confirm the climate entity/select/sensors/switches all match the real app's
+  state 1:1, and do one deliberate real control action (e.g. fan speed) to validate the
+  provisional `wind_volume`/`wind_direction` ranges and temperature step called out in the
+  Phase 2 section below. See PHASE1_PLAN.md's "Testing plan" §5 for the intended structure.
 
 ## How to leave notes for next time
 

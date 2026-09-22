@@ -228,7 +228,9 @@ controlled), options flow (scan interval, etc.), multi-account beyond "run confi
 
 ## Testing plan
 
-No local HA dev environment exists in this repo yet.
+_Status: done, see CLAUDE.md's "unit test suite written and green" update (2026-09-22) for
+what actually got built and one environmental gotcha worth knowing about before touching this
+again. This section is kept as the original design record._
 
 1. **`pytest-homeassistant-custom-component`** harness, `tests/` mirroring the component layout,
    `MockConfigEntry` + `aioresponses`/`aioclient_mock` intercepting both `auth.digital.

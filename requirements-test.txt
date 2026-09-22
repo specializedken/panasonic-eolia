@@ -1,0 +1,16 @@
+# Test-only dependencies for custom_components/eolia. Not needed to run the integration
+# itself under a real Home Assistant install (that pulls its own homeassistant version).
+#
+# Setup:
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements-test.txt
+# Run:
+#   python -m pytest -q
+#
+# aiodns/pycares versions are pinned to match what homeassistant==2025.1.4 itself
+# requires -- see tests/conftest.py's _prime_pycares_shutdown_thread for why this
+# specific combination needs a workaround for a pytest-homeassistant-custom-component
+# thread-leak check false positive.
+pytest-homeassistant-custom-component==0.13.205
+freezegun==1.5.1
+aiodns==3.2.0
