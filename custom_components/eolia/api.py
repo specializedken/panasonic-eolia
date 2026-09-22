@@ -1,0 +1,131 @@
+"""Eolia cloud API client.
+
+Wire protocol details (base URL, headers, the X-Eolia-Date clock-skew check, the exact
+control-request field set) are all taken from findings.md's live-confirmed contract.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from typing import Any
+from urllib.parse import quote
+from zoneinfo import ZoneInfo
+
+from aiohttp import ClientError, ClientSession
+
+from .auth import EoliaAuth
+from .const import (
+    API_BASE_URL,
+    EOLIA_DATE_FORMAT,
+    EOLIA_DATE_TIMEZONE,
+    ERROR_CODE_CLOCK_SKEW,
+)
+from .exceptions import EoliaApiError, EoliaClockSkewError, EoliaNetworkError
+from .models import EoliaDevice, EoliaStatus
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class EoliaApiClient:
+    """Thin async wrapper around the Eolia device-control API."""
+
+    def __init__(self, session: ClientSession, auth: EoliaAuth) -> None:
+        self._session = session
+        self._auth = auth
+
+    async def async_get_devices(self) -> list[EoliaDevice]:
+        """GET /devices."""
+        data = await self._async_request("GET", "/devices")
+        return [EoliaDevice.from_dict(item) for item in data.get("ac_list", [])]
+
+    async def async_get_status(self, appliance_id: str) -> EoliaStatus:
+        """GET /devices/{appliance_id}/status."""
+        data = await self._async_request("GET", self._status_path(appliance_id))
+        return EoliaStatus.from_dict(data)
+
+    async def async_set_status(
+        self, appliance_id: str, payload: dict[str, Any]
+    ) -> EoliaStatus:
+        """PUT /devices/{appliance_id}/status.
+
+        `payload` must already be the exact fixed field set from
+        EoliaStatus.to_control_fields() plus silence_control -- this method does not
+        validate or filter it, since building that payload correctly is coordinator.py's
+        responsibility (it needs the previous state to do a read-modify-write).
+        """
+        data = await self._async_request(
+            "PUT", self._status_path(appliance_id), json_body=payload
+        )
+        return EoliaStatus.from_dict(data)
+
+    @staticmethod
+    def _status_path(appliance_id: str) -> str:
+        return f"/devices/{quote(appliance_id, safe='')}/status"
+
+    @staticmethod
+    def _headers(access_token: str) -> dict[str, str]:
+        # Must be JST regardless of the HA host's own timezone -- the server enforces a
+        # +/-5 minute clock-skew check against this. Confirmed live 2026-09-23.
+        now = datetime.now(ZoneInfo(EOLIA_DATE_TIMEZONE))
+        return {
+            "Accept": "application/json",
+            "Content-Type": "application/json;charset=UTF-8",
+            "X-Eolia-Date": now.strftime(EOLIA_DATE_FORMAT),
+            "Authorization": f"Bearer {access_token}",
+        }
+
+    async def _async_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: dict[str, Any] | None = None,
+        _retried_auth: bool = False,
+    ) -> dict[str, Any]:
+        access_token = await self._auth.async_get_access_token()
+        url = f"{API_BASE_URL}{path}"
+        try:
+            async with self._session.request(
+                method, url, headers=self._headers(access_token), json=json_body
+            ) as resp:
+                if resp.status in (401, 403) and not _retried_auth:
+                    _LOGGER.debug(
+                        "Eolia API returned %s, forcing token refresh and retrying once",
+                        resp.status,
+                    )
+                    await self._auth.async_force_refresh()
+                    return await self._async_request(
+                        method, path, json_body=json_body, _retried_auth=True
+                    )
+
+                try:
+                    body: dict[str, Any] = await resp.json(content_type=None)
+                except ValueError:
+                    body = {}
+
+                if resp.status >= 400:
+                    code = body.get("code")
+                    message = body.get("message", "")
+                    if code is None:
+                        _LOGGER.warning(
+                            "Eolia API error with no recognizable code: status=%s body=%s",
+                            resp.status,
+                            body,
+                        )
+                    elif code not in (ERROR_CODE_CLOCK_SKEW,):
+                        # Only two codes are documented in findings.md so far -- log
+                        # anything else verbatim so it can be folded back in later.
+                        _LOGGER.debug(
+                            "Eolia API error code=%s message=%s (undocumented code, "
+                            "consider adding to findings.md)",
+                            code,
+                            message,
+                        )
+                    if code == ERROR_CODE_CLOCK_SKEW:
+                        raise EoliaClockSkewError(resp.status, code, message)
+                    raise EoliaApiError(resp.status, code, message)
+
+                return body
+        except ClientError as err:
+            raise EoliaNetworkError(f"Network error calling {method} {path}: {err}") from err

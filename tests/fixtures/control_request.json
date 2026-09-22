@@ -1,0 +1,15 @@
+{
+  "ai_control": "off",
+  "air_flow": "not_set",
+  "airquality": false,
+  "nanoex": true,
+  "operation_mode": "Cooling",
+  "silence_control": false,
+  "operation_status": true,
+  "temperature": 20.0,
+  "timer_value": 0,
+  "wind_direction": 3,
+  "wind_volume": 3,
+  "wind_direction_horizon": "front",
+  "wind_shield_hit": "not_set"
+}

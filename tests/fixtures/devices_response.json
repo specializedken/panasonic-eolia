@@ -1,0 +1,23 @@
+{
+  "ac_list": [
+    {
+      "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+      "nickname": "Yurt",
+      "purchase_date": "2024-09-16",
+      "shop_category_id": "0",
+      "shop_area_id": "",
+      "shop_name": "",
+      "inst_place_id": "001",
+      "memo": "",
+      "appliance_type": 1,
+      "product_code": "CS-712DX2-W",
+      "product_name": "ルームエアコン　ホワイト",
+      "hashed_guid": "f036d8c6bf9cc8caa99d7c3f45d7503da59cfe9c6c96f3c9ed3e1dadddeac57c",
+      "device_register_num": 1,
+      "initialize_flg": false,
+      "repair_status": "initial",
+      "point_code": "1223800",
+      "vpa_enable": false
+    }
+  ]
+}

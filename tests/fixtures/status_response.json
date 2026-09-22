@@ -1,0 +1,23 @@
+{
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "operation_status": true,
+  "operation_mode": "ComfortableDehumidification",
+  "temperature": 0.0,
+  "wind_volume": 0,
+  "wind_direction": 0,
+  "inside_humidity": 60,
+  "inside_temp": 22.5,
+  "outside_temp": 23.0,
+  "operation_priority": false,
+  "timer_value": 0,
+  "device_errstatus": false,
+  "airquality": false,
+  "nanoex": true,
+  "aq_value": -1,
+  "aq_name": "off",
+  "ai_control": "off",
+  "air_flow": "not_set",
+  "humidity": 50,
+  "wind_shield_hit": "not_set",
+  "wind_direction_horizon": "auto"
+}

@@ -155,6 +155,47 @@ non-interactive HA setup (a real user needs to do the Authorization Code + PKCE 
 once — browser + devtools is enough, no app/emulator needed for that part — then HA just needs
 to hold onto and refresh the resulting refresh_token).
 
+## Phase 2 — Home Assistant integration (in progress)
+
+Kevin asked to build an actual HA integration covering every feature of the app, phased.
+Full design lives in the approved plan this was built from (was at
+`~/.claude/plans/rosy-doodling-marble.md` in the session that wrote it — copy its content into
+this repo as a design doc if that plan file isn't available in a future session). Summary:
+
+- **Phase 1 scope** (in progress): `climate` entity (power, full `operation_mode` enum via
+  `preset_mode`, coarse `hvac_mode` buckets, temperature, fan speed, both swing axes),
+  `select.eolia_ai_mode` (the `ai_control` field), read-only sensors (indoor/outdoor temp,
+  humidity, air quality), and switches for `nanoex`/`airquality` monitoring/`silence_control`.
+  Everything else the app does (weekly timer, AI scenes, eco history, notifications, firmware
+  checks, etc.) is explicitly deferred to a later phase.
+- **Auth constraint discovered and confirmed live**: Eolia's Auth0 client is a native-app
+  registration with a fixed `redirect_uri` — tested directly against `/authorize` with
+  alternate redirect URIs (e.g. HA's own callback), got an explicit `unauthorized_client` /
+  "Callback URL mismatch" error every time. HA's built-in OAuth2 config-flow helper genuinely
+  cannot be used. `config_flow.py` hand-rolls the PKCE dance instead, with DevTools-based
+  code extraction (foolproof step-by-step instructions baked into the form) as the
+  zero-assumptions primary path — explicitly **not** relying on any one-time OS/browser
+  customization, since that doesn't generalize past one specific machine.
+- **Code written** (all at `custom_components/eolia/`, Python-syntax-checked but **not yet
+  runtime-tested against real Home Assistant** — that resumes on europa, which already has HA
+  installed; deliberately did not pip-install `homeassistant`/pytest harness on this laptop):
+  `const.py`, `exceptions.py`, `models.py`, `auth.py`, `api.py`, `coordinator.py`,
+  `config_flow.py`, `entity.py`, `climate.py`, `select.py`, `sensor.py`, `switch.py`,
+  `__init__.py`, `manifest.json`, `strings.json`/`translations/en.json`. Fixtures from real
+  captured traffic at `tests/fixtures/` (`status_response.json`, `control_request.json`,
+  `control_response.json`, `devices_response.json`) — no test files written yet.
+- **Provisional/unconfirmed values to validate on real hardware once testable on europa**:
+  `wind_volume`/`wind_direction` level ranges (guessed `0–5`, only `3` ever observed live),
+  temperature step (guessed `1.0°C`, the one live capture doesn't disambiguate 0.5 vs 1.0),
+  the `hvac_mode` bucket table for the less common `operation_mode` values (SmellCare,
+  NanoexCleaning, AutoTempControl, etc. — bucketed by best guess, not confirmed against real
+  device behavior).
+- **Next step**: on europa, set up `pytest-homeassistant-custom-component` (or just symlink
+  `custom_components/eolia` into a real HA config and drive the actual config flow), run
+  through the real login flow, and validate every entity against the real device — see the
+  plan file's "Testing plan" section for the intended structure (unit tests with the
+  `tests/fixtures/*.json` fixtures already captured, plus a manual smoke test).
+
 ## How to leave notes for next time
 
 Keep this file (or a linked `findings.md` in this same directory) updated as work progresses —

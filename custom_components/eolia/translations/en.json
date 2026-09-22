@@ -1,0 +1,61 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "menu_options": {
+          "browser_pkce": "Log in with a browser (recommended)",
+          "paste_refresh_token": "I already have a refresh token"
+        }
+      },
+      "browser_pkce": {
+        "title": "Log in to your Panasonic account",
+        "description": "1. Open this link in any browser: {authorize_url}\n2. Log in with your Panasonic ID (the same account the Eolia app uses).\n3. The page will fail to load after you log in -- **this is expected**, ignore any error shown.\n4. Open your browser's Developer Tools (F12 on Windows/Linux, Cmd+Option+I on Mac) and switch to the **Network** tab.\n5. Find the request whose Name starts with `panasonic-eolia:` and click it.\n6. Copy the full **Request URL** shown in the right-hand panel (it contains `code=...`).\n7. Paste that whole URL below.",
+        "data": {
+          "authorization_response": "Pasted URL (or just the code)"
+        }
+      },
+      "paste_refresh_token": {
+        "title": "Enter a refresh token",
+        "description": "Paste a refresh_token you already obtained (for example, by running this repo's PKCE helper script by hand once).",
+        "data": {
+          "refresh_token": "Refresh token"
+        }
+      }
+    },
+    "error": {
+      "invalid_code": "Couldn't find a code= value in what you pasted. Paste the full URL DevTools showed you, or just the code by itself.",
+      "code_exchange_failed": "Panasonic rejected that code -- it may have expired (they're single-use and short-lived). Try the login link again.",
+      "invalid_refresh_token": "Panasonic rejected that refresh token."
+    },
+    "abort": {
+      "already_configured": "This Panasonic account is already set up.",
+      "reauth_successful": "Re-authentication was successful.",
+      "cannot_connect": "Could not reach the Eolia API to finish setup. Check your connection and try again.",
+      "missing_account_id": "Panasonic's login response didn't include the expected account information. Please try again."
+    }
+  },
+  "entity": {
+    "select": {
+      "ai_mode": {
+        "name": "AI mode",
+        "state": {
+          "off": "Off",
+          "comfortable": "AI comfort",
+          "comfortable_econavi": "AI comfort + ECONAVI"
+        }
+      }
+    },
+    "sensor": {
+      "indoor_temperature": { "name": "Indoor temperature" },
+      "outdoor_temperature": { "name": "Outdoor temperature" },
+      "indoor_humidity": { "name": "Indoor humidity" },
+      "air_quality": { "name": "Air quality" },
+      "air_quality_value": { "name": "Air quality (raw value)" }
+    },
+    "switch": {
+      "nanoex": { "name": "nanoeX" },
+      "air_quality_monitor": { "name": "Air quality monitoring" },
+      "silence_control": { "name": "Quiet mode" }
+    }
+  }
+}

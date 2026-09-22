@@ -1,0 +1,23 @@
+{
+  "operation_token": "RdGdV8zfXxFdTvL0",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "operation_status": true,
+  "operation_mode": "Cooling",
+  "temperature": 20.0,
+  "wind_volume": 3,
+  "wind_direction": 3,
+  "inside_humidity": 65,
+  "inside_temp": 21.5,
+  "outside_temp": 23.0,
+  "operation_priority": false,
+  "timer_value": 0,
+  "device_errstatus": false,
+  "airquality": false,
+  "nanoex": true,
+  "aq_value": -1,
+  "aq_name": "off",
+  "ai_control": "off",
+  "air_flow": "not_set",
+  "wind_shield_hit": "not_set",
+  "wind_direction_horizon": "front"
+}
