@@ -37,11 +37,14 @@ detail — this README is just an index pointing at the headline finding of each
 
 - The `ai_control` drift seen in 09 (`comfortable_econavi`→`comfortable` with no write from
   either side) — one-off, not reproduced since, not understood.
-- `outside_temp=999.0` right at power-on, before settling to a real reading a few minutes
-  later — sensor warm-up lag is the leading theory, not confirmed.
+- ~~`outside_temp=999.0` right at power-on~~ — **RESOLVED**: powering the unit back off
+  (end of this session) made `outside_temp` immediately revert to `999.0` again, so it
+  correlates with power state (outdoor sensor only reports while running), not a one-time
+  startup lag as originally guessed.
 - Whether `temperature=0.0` is required/rejected the same way for other rarely-used
-  `operation_mode` values (SmellCare, NanoexCleaning, AutoTempControl, ClothesDryer,
-  etc.) — none of those tested yet (`Blast` now confirmed as fan-only, no temp control).
+  `operation_mode` values (SmellCare, NanoexCleaning, AutoTempControl, KeepHeating,
+  Auto) — none of those tested yet (`Blast`/`Heating`/`ClothesDryer`/`ComfortableDehumidification`
+  now confirmed).
 - Whether horizontal `wind_direction_horizon=auto` has the same "API can enter but not
   leave" asymmetry the vertical axis has (see 15/18) — not yet tested (would need a
   fixed-position write while horizontal auto is active).

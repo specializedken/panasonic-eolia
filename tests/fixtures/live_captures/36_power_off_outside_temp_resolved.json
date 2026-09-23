@@ -1,0 +1,41 @@
+{
+  "description": "operation_status=false (power off), resolving the outside_temp=999.0 open question from capture 01: it reverted to the sentinel immediately on power-off, confirming it correlates with power state (outdoor sensor only reports while the unit is running) rather than being a one-time startup lag.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Heating",
+    "operation_status": false,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 0,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": false,
+    "operation_mode": "Stop",
+    "ai_control": "off",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 20.0,
+    "inside_humidity": 70,
+    "outside_temp": 999.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": null,
+  "notes": [
+    "RESOLVED: outside_temp=999.0 correlates with power state, not a one-time post-power-on lag. Note the request body still sent operation_mode='Heating' (the last active mode, carried over unmodified) with operation_status=false -- the server accepted this and independently reset operation_mode to 'Stop' in the response, confirming operation_status and operation_mode are treated as genuinely independent fields server-side (matches climate.py's existing design: power is mapped from operation_status, not inferred from operation_mode)."
+  ]
+}
