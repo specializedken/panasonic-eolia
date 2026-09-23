@@ -402,8 +402,7 @@ this repo as a design doc if that plan file isn't available in a future session)
   communications between HA and the aircon? There will be impossible combinations we
   have to guard against"), debug logging was temporarily enabled
   (`custom_components.eolia.api: debug` in `configuration.yaml`'s `logger:` block --
-  still on, intentionally, for the next session; remove once this feature-audit pass is
-  fully done) and watched live via `docker logs -f` while driving the real app/HA UI.
+  REMOVED at the end of the audit; re-add that two-line block to trace requests again) and watched live via `docker logs -f` while driving the real app/HA UI.
   Real bugs found and fixed this way, all covered by new tests, all redeployed and
   reverified live:
   - **Silent no-op setting a temperature in Dry/ClothesDryer mode.** Both modes have no
@@ -539,15 +538,23 @@ this repo as a design doc if that plan file isn't available in a future session)
     through HA; first write after an HA restart (in-memory `operation_token`/
     `silence_control`/humidity caches lost); token refresh; multiple devices.
   - 185 tests now (up from 132 at the start of this pass).
-- **Next step**: resume the live "impossible combinations" audit -- systematically drive
-  every remaining `operation_mode`/field combination through the real HA UI while
-  watching `docker logs -f homeassistant | grep -i eolia` (the debug logger is still on
-  for exactly this). Not yet exercised this way: `Auto` and the clean family combined with
-  nanoex/ai_control/silence_control in various combinations, and the double-temperature
-  (`KeepMode`) and Dry-humidity number entities haven't been exercised live through HA
-  yet either (only unit-tested + confirmed via the CLI previously). Also still open: the
-  temperature step (0.5 vs 1.0°C) and the remaining unconfirmed `hvac_mode` bucket
-  entries for `SmellCare`/`SmellCareSpot`/`NanoexCleaning`/`Cleaning`/`AutoTempControl`.
+- **Audit wrapped up (2026-09-23) -- next step: the custom Lovelace card.** The live
+  "impossible combinations" audit through the real HA UI is done; the integration is stable
+  enough to build on. Kevin's motivation for a card: many settings depend on the current
+  mode and the stock climate card can't express that (e.g. Dry has a humidity target and no
+  temperature, `KeepMode` a range, the clean modes run with `operation_status: false`, AI
+  isn't available in Blast/ClothesDryer). Icons are extractable with
+  `python tools/extract_icons.py` into a gitignored `icons/` (Panasonic's artwork: local use
+  only, never commit or publish). The per-model `GET /products/{code}/functions` flags
+  (coordinator `supports()`) say which controls a model has. Open design questions: one card
+  vs several, and where the JS and icons get served from in Kevin's HA. Number entities
+  fire one write per click, so the card should debounce (writes take ~3s each).
+- **Known gaps, deliberately left**: changing settings during a clean-family mode (the "AC is
+  off" guard still fires), louvers in `KeepMode`, `air_flow`/shield-hit in the clean modes,
+  `CoolDehumidifying` through HA (CLI-confirmed only), `KeepHeating` (rejected, no flag
+  explains it), `MoistCooling` (flagged supported but downgrades to `Cooling`), Kevin's
+  unexplained 14:06 power-on, the 0.5 vs 1.0C temperature step, token refresh after 14 days,
+  and multiple devices/models (capability gating is only proven on CS-712DX2-W).
 
 ## How to leave notes for next time
 
