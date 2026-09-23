@@ -155,7 +155,7 @@ time. Not fully traced yet.)
 | `ClothesDryer` | 衣類乾燥 | Clothes-drying mode |
 | `MoistCooling` | しっとり冷房 | "Moist cooling" (humidity-aware cool) |
 | `AutoTempControl` | おまかせ温度制御 | "Leave it to us" auto temp control (uses `temp_correction`/`local_outside_temp`) |
-| `KeepMode` | ダブル温度設定 | Dual-temperature keep mode |
+| `KeepMode` | ダブル温度設定 | Dual-temperature keep mode — the low/high range is **not** in `/status`, see "Double temperature setting" below |
 | `SmellCare` / `SmellCareSpot` | においケア / においケア ねらって脱臭 | Odor-care / targeted odor-care |
 | `NanoexCleaning` | おでかけクリーン | "Away clean" nanoeX mode |
 | `Cleaning` | おそうじ | Self-clean |
@@ -166,6 +166,33 @@ So **"Dry" vs "Cool & Dehumidify" are two distinct `operation_mode` string value
 (`ComfortableDehumidification` vs `CoolDehumidifying`), sent as plain strings in the same JSON
 body as everything else — not a separate flag, not ECHONET, confirming the original hardware
 investigation.
+
+### `KeepMode` / ダブル温度設定 ("double temperature setting") — range lives in `/customsettings`
+
+Added 2026-09-23. `operation_mode: "KeepMode"` only tells you the mode is active; `/status`
+carries a single `temperature` (was `24.0` live) and no second setpoint. The actual range is a
+separate per-device resource, found statically and **confirmed live (GET only)**:
+
+- **Endpoint:** `GET`/`PUT /eolia/v6/devices/{applianceId}/customsettings`
+  (`api_common_devices_file` + `api_get_my_aircon_setting` in `strings.xml`; client class
+  `a9/p.java`, "MyAirconSettingApi"; UI is `MyAirconSettingActivity` with a two-thumb dial,
+  `CircleSeekTwoThumb`).
+- **Live GET response** (Kevin had set 23–28 °C in the app; `operation_token` omitted here):
+  ```json
+  {"peak_cut": 100, "double_mode_temp": {"status": true, "high": 28, "low": 23},
+   "operation_priority": false, "device_errstatus": false, "operation_token": "..."}
+  ```
+- **PUT body** (`CustomSettingSendMsgRequest`): `double_mode_temp` `{status, high, low}`,
+  `peak_cut` (echoed from the GET), `operation_token` (same `b9.a.X(...)` token source as the
+  `/status` PUT). `appliance_id` is excluded by that class's own Gson `ExclusionStrategy` —
+  same "id only in the URL" rule as `/status`. **PUT not yet tried live.**
+- **Types / ranges:** `high`/`low` are **integers** (°C). The app treats `high` outside 21–30
+  or `low` outside 16–25 as invalid and falls back to the locally cached value
+  (`MyAirconSettingActivity.X()`), so those are the effective UI bounds.
+- `status` is the on/off toggle for the double-temperature feature on that screen; switching
+  the unit into it is still `operation_mode: "KeepMode"` via `/status`. `peak_cut` (100 = off?)
+  and `operation_priority` (when true the app greys the screen out — another controller has
+  priority) ride along on the same resource.
 
 ### `ai_control` — AI mode / ECONAVI
 
