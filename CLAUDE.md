@@ -505,14 +505,25 @@ this repo as a design doc if that plan file isn't available in a future session)
     (`_last_mode_cache`; never the clean family, `Nanoe` saved as `Blast`) and `turn_on`
     powers on into it via the preset path, falling back to `Auto` (e.g. after an HA
     restart). Confirmed live: `Auto`, `200`.
-  - **Still-untested combinations** (ranked): double-temp low/high changes while `KeepMode`
+  - **Concurrent writes caused the `E-21291-01718` lockout too** (found dragging a number
+    slider): two writes ~0.6s apart both echoed the same token, so the second was rejected
+    as "another device" -- the token-continuity theory again. `coordinator` now serialises
+    every write behind one `asyncio.Lock` so each picks up the fresh token; confirmed live
+    (the next write left the instant the previous response arrived, with its new token).
+    The lockout error is translated to English on both write paths (the server's message is
+    Japanese-only), including that it also fires on the first write after an HA restart.
+  - **Double-temp changes while `KeepMode` is on work**, with a nudge: moving one bound
+    within 5 degrees of the other (`E-21291-02009`) moves the other bound to keep the gap
+    when that stays in range (low 16-25, high 21-30). Confirmed live (high 27->26 moved low
+    22->21). The `02009` error message is translated to English too.
+  - **Still-untested combinations** (ranked; the first two are now done): double-temp low/high changes while `KeepMode`
     is on (and the >=5 gap from two separate sliders); settings the app hides per mode
     (fan speed in Dry/ClothesDryer, `ai_control` in ClothesDryer/Blast, louvers in
     KeepMode, `air_flow`/shield-hit in the clean modes); changing settings during a clean
     mode (the "AC is off" guard fires); nanoeX toggling around `Nanoe`; `CoolDehumidifying`
     through HA; first write after an HA restart (in-memory `operation_token`/
     `silence_control`/humidity caches lost); token refresh; multiple devices.
-  - 174 tests now (up from 132 at the start of this pass).
+  - 182 tests now (up from 132 at the start of this pass).
 - **Next step**: resume the live "impossible combinations" audit -- systematically drive
   every remaining `operation_mode`/field combination through the real HA UI while
   watching `docker logs -f homeassistant | grep -i eolia` (the debug logger is still on

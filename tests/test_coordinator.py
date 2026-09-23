@@ -8,6 +8,7 @@ contain silence_control, even though silence_control has no GET readback at all.
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -15,7 +16,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.eolia.const import CONTROL_REQUEST_FIELDS, CUSTOM_SETTINGS_REQUEST_FIELDS
 from custom_components.eolia.coordinator import EoliaDataUpdateCoordinator
-from custom_components.eolia.exceptions import EoliaApiError
+from custom_components.eolia.exceptions import EoliaApiError, EoliaDeviceLockedError
 from custom_components.eolia.models import EoliaCustomSettings, EoliaDevice, EoliaStatus
 
 APPLIANCE_ID = "EXAMPLEAPPLIANCEID0000000000000000000000000="
@@ -234,7 +235,8 @@ async def test_set_custom_settings_fetches_first_if_no_cached_data(
     # test_set_custom_settings_raises_when_server_silently_ignores_the_change.
     new_settings = EoliaCustomSettings.from_dict(
         {
-            "double_mode_temp": {"status": True, "high": 27, "low": 23},
+            # high=27 leaves only a 4 degree gap to low=23, so low is nudged to 22.
+            "double_mode_temp": {"status": True, "high": 27, "low": 22},
             "peak_cut": initial_custom_settings.peak_cut,
         }
     )
@@ -525,6 +527,90 @@ async def test_last_mode_is_remembered_for_bare_power_on(
     )
     coordinator._remember_mode(APPLIANCE_ID, status)
     assert coordinator.get_last_mode(APPLIANCE_ID) == expected
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected"),
+    [
+        # Live 2026-09-23: low 23->24 with high 28 was rejected (gap 4).
+        ({"double_mode_temp_low": 24}, {"high": 29, "low": 24}),
+        ({"double_mode_temp_high": 24}, {"high": 24, "low": 19}),
+        # Nudging would leave the valid range, so the request goes out as asked.
+        ({"double_mode_temp_low": 27}, {"high": 28, "low": 27}),
+        ({"double_mode_temp_high": 21}, {"high": 21, "low": 16}),
+        ({"double_mode_temp_high": 19}, {"high": 19, "low": 23}),
+    ],
+)
+async def test_moving_one_bound_within_five_degrees_nudges_the_other(
+    coordinator, changes, expected
+):
+    coordinator.custom_settings[APPLIANCE_ID] = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": True, "high": 28, "low": 23}, "peak_cut": 100}
+    )
+    coordinator.api.async_set_custom_settings.return_value = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": True, **expected}, "peak_cut": 100}
+    )
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, **changes)
+
+    _, payload = coordinator.api.async_set_custom_settings.call_args.args
+    assert payload["double_mode_temp"] == {"status": True, **expected}
+
+
+async def test_narrow_range_rejection_gets_an_english_message(coordinator):
+    coordinator.custom_settings[APPLIANCE_ID] = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": True, "high": 28, "low": 23}, "peak_cut": 100}
+    )
+    coordinator.api.async_set_custom_settings.side_effect = EoliaApiError(
+        400, "E-21291-02009", "温度設定は5℃以上開くように設定してください。"
+    )
+
+    with pytest.raises(HomeAssistantError, match="at least 5 degrees apart"):
+        await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_low=27)
+
+
+async def test_concurrent_writes_are_serialised_so_each_echoes_the_fresh_token(
+    coordinator, initial_custom_settings
+):
+    # Live 2026-09-23: a slider drag fired two writes 0.6s apart carrying the same token;
+    # the second got E-21291-01718.
+    coordinator.custom_settings[APPLIANCE_ID] = initial_custom_settings
+    sent_tokens: list[str | None] = []
+
+    async def fake_put(appliance_id, payload):
+        sent_tokens.append(payload.get("operation_token"))
+        await asyncio.sleep(0.01)  # the first response is still in flight
+        return EoliaCustomSettings.from_dict(
+            {
+                "double_mode_temp": payload["double_mode_temp"],
+                "peak_cut": 100,
+                "operation_token": f"T{len(sent_tokens)}",
+            }
+        )
+
+    coordinator.api.async_set_custom_settings.side_effect = fake_put
+
+    await asyncio.gather(
+        coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_high=28),
+        coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_high=27),
+    )
+
+    assert sent_tokens == [None, "T1"]
+
+
+async def test_lockout_error_explains_the_two_minute_rule_on_both_write_paths(
+    coordinator, initial_status, initial_custom_settings
+):
+    locked = EoliaDeviceLockedError(409, "E-21291-01718", "他の機器でエアコンが制御されました。")
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.custom_settings[APPLIANCE_ID] = initial_custom_settings
+    coordinator.api.async_set_status.side_effect = locked
+    coordinator.api.async_set_custom_settings.side_effect = locked
+
+    with pytest.raises(HomeAssistantError, match="about 2 minutes"):
+        await coordinator.async_set_status(APPLIANCE_ID, wind_volume=3)
+    with pytest.raises(HomeAssistantError, match="about 2 minutes"):
+        await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_low=22)
 
 
 async def test_get_humidity_defaults_to_lowest_confirmed_value(coordinator):

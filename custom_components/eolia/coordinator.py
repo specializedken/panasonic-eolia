@@ -27,12 +27,19 @@ from .const import (
     DOUBLE_MODE_TEMP_HIGH_RANGE,
     DOUBLE_MODE_TEMP_LOW_RANGE,
     DRY_MODE_HUMIDITY_RANGE,
+    ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW,
     FALLBACK_TEMPERATURE,
     CLEAN_FAMILY_MODES,
     NO_TARGET_TEMPERATURE_MODES,
     EoliaOperationMode,
 )
-from .exceptions import EoliaApiError, EoliaAuthError, EoliaClockSkewError, EoliaNetworkError
+from .exceptions import (
+    EoliaApiError,
+    EoliaAuthError,
+    EoliaClockSkewError,
+    EoliaDeviceLockedError,
+    EoliaNetworkError,
+)
 from .models import EoliaCustomSettings, EoliaDevice, EoliaStatus
 
 _LOGGER = logging.getLogger(__name__)
@@ -103,6 +110,11 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # sending the carried-over "Stop" is rejected with E-21291-01711 (live 2026-09-23).
         # Mirrors the app's own "last drive mode", which also never saves the clean family.
         self._last_mode_cache: dict[str, str] = {}
+        # Every write echoes the previous response's operation_token, so two writes in
+        # flight at once both carry the same token and the second is rejected as "another
+        # device" (E-21291-01718). Live 2026-09-23: dragging a number slider fired two
+        # writes 0.6s apart. Serialising them lets each one pick up the fresh token.
+        self._write_lock = asyncio.Lock()
 
     def _remember_mode(self, appliance_id: str, status: EoliaStatus) -> None:
         mode = status.operation_mode
@@ -133,6 +145,19 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
             )
         except (EoliaApiError, EoliaAuthError) as err:
             _LOGGER.debug("Failed to fetch functions for %s: %s", appliance_id, err)
+
+    @staticmethod
+    def _write_error(err: Exception, what: str) -> HomeAssistantError:
+        """Build the user-facing error for a failed write."""
+        if isinstance(err, EoliaDeviceLockedError):
+            # The server's own message is Japanese-only ("controlled by another device").
+            return HomeAssistantError(
+                "The AC is temporarily locked and won't accept changes for about 2 minutes. "
+                "This happens right after another change it can't tell apart from a second "
+                "remote: the Eolia app, the physical remote, or the first change after Home "
+                "Assistant restarts. Wait 2 minutes, then try again."
+            )
+        return HomeAssistantError(f"Failed to update {what}: {err}")
 
     def _remember_temperature(self, appliance_id: str, status: EoliaStatus) -> None:
         if status.temperature:
@@ -194,6 +219,14 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         return self._humidity_cache.get(appliance_id, DRY_MODE_HUMIDITY_RANGE[0])
 
     async def async_set_status(self, appliance_id: str, **changes: Any) -> None:
+        async with self._write_lock:
+            await self._async_set_status(appliance_id, **changes)
+
+    async def async_set_custom_settings(self, appliance_id: str, **changes: Any) -> None:
+        async with self._write_lock:
+            await self._async_set_custom_settings(appliance_id, **changes)
+
+    async def _async_set_status(self, appliance_id: str, **changes: Any) -> None:
         """Apply `changes` on top of the last-known status and PUT the result.
 
         `changes` keys must match EoliaStatus field names (operation_mode, temperature,
@@ -255,7 +288,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         try:
             new_status = await self.api.async_set_status(appliance_id, payload)
         except (EoliaApiError, EoliaAuthError) as err:
-            raise HomeAssistantError(f"Failed to update Eolia device: {err}") from err
+            raise self._write_error(err, "Eolia device") from err
 
         if new_status.operation_token:
             self._operation_token_cache[appliance_id] = new_status.operation_token
@@ -294,7 +327,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 "this device via the API, even though it appears in the picker."
             )
 
-    async def async_set_custom_settings(self, appliance_id: str, **changes: Any) -> None:
+    async def _async_set_custom_settings(self, appliance_id: str, **changes: Any) -> None:
         """Apply `changes` on top of the last-known .../customsettings and PUT the result.
 
         `changes` keys are `double_mode_temp_status`/`double_mode_temp_high`/
@@ -311,6 +344,8 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         if token is not None:
             payload["operation_token"] = token
         double_mode_temp = dict(payload["double_mode_temp"])
+        changed_low = "double_mode_temp_low" in changes
+        changed_high = "double_mode_temp_high" in changes
         if "double_mode_temp_status" in changes:
             double_mode_temp["status"] = changes.pop("double_mode_temp_status")
         if "double_mode_temp_high" in changes:
@@ -341,14 +376,34 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 DOUBLE_MODE_TEMP_LOW_RANGE[0],
                 min(DOUBLE_MODE_TEMP_LOW_RANGE[1], double_mode_temp["high"] - 5),
             )
+        # Two separate sliders can't both move at once, so moving one bound within 5 degrees
+        # of the other (E-21291-02009, live 2026-09-23) nudges the other bound instead,
+        # when that stays inside its valid range; otherwise the server's rejection stands.
+        if double_mode_temp["high"] and double_mode_temp["low"]:
+            if double_mode_temp["high"] - double_mode_temp["low"] < 5:
+                if changed_low and not changed_high:
+                    nudged = double_mode_temp["low"] + 5
+                    if nudged <= DOUBLE_MODE_TEMP_HIGH_RANGE[1]:
+                        double_mode_temp["high"] = nudged
+                elif changed_high and not changed_low:
+                    nudged = double_mode_temp["high"] - 5
+                    if nudged >= DOUBLE_MODE_TEMP_LOW_RANGE[0]:
+                        double_mode_temp["low"] = nudged
         payload["double_mode_temp"] = double_mode_temp
         payload.update(changes)  # e.g. peak_cut, if ever needed
 
         try:
             new_settings = await self.api.async_set_custom_settings(appliance_id, payload)
         except (EoliaApiError, EoliaAuthError) as err:
-            raise HomeAssistantError(
-                f"Failed to update Eolia device's double-temperature settings: {err}"
+            if getattr(err, "code", None) == ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW:
+                # The server's own message is Japanese-only.
+                raise HomeAssistantError(
+                    "The low and high temperatures must be at least 5 degrees apart "
+                    f"(and inside {DOUBLE_MODE_TEMP_LOW_RANGE[0]}-"
+                    f"{DOUBLE_MODE_TEMP_HIGH_RANGE[1]}C)."
+                ) from err
+            raise self._write_error(
+                err, "Eolia device's double-temperature settings"
             ) from err
 
         if new_settings.operation_token:
