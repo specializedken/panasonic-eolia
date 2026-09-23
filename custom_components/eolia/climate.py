@@ -72,11 +72,19 @@ _DEFAULT_MODE_FOR_HVAC_MODE: dict[HVACMode, EoliaOperationMode] = {
 }
 
 # STOP and OTHER are excluded: STOP is handled via hvac_mode OFF (operation_status),
-# OTHER is a fallback/unknown value never offered as a user selection.
+# OTHER is a fallback/unknown value never offered as a user selection. DEHUMIDIFYING
+# (plain, non-AI dehumidify) is excluded too -- confirmed rejected twice on this device
+# (E-21291-01712/E-21291-01711 depending on payload), both via the CLI and the real HA
+# integration; the app's own "dehumidification" menu item maps to
+# ComfortableDehumidification instead. See findings.md's "What the cooling/dehumidify
+# family actually does" section and tests/fixtures/live_captures/19.
+_UNSETTABLE_PRESET_MODES = (
+    EoliaOperationMode.STOP,
+    EoliaOperationMode.OTHER,
+    EoliaOperationMode.DEHUMIDIFYING,
+)
 _SETTABLE_PRESET_MODES = [
-    mode.value
-    for mode in EoliaOperationMode
-    if mode not in (EoliaOperationMode.STOP, EoliaOperationMode.OTHER)
+    mode.value for mode in EoliaOperationMode if mode not in _UNSETTABLE_PRESET_MODES
 ]
 
 _SWING_HORIZONTAL_MODES = [mode.value for mode in EoliaWindDirectionHorizon]

@@ -59,6 +59,16 @@ def test_stop_and_other_are_not_settable_presets():
     assert EoliaOperationMode.OTHER.value not in _SETTABLE_PRESET_MODES
 
 
+def test_plain_dehumidifying_is_not_a_settable_preset():
+    # Confirmed rejected twice on this device (CLI and the real HA integration) --
+    # excluded so it doesn't show as a pickable-but-broken option. The app's own
+    # "dehumidification" menu item maps to ComfortableDehumidification instead.
+    assert EoliaOperationMode.DEHUMIDIFYING.value not in _SETTABLE_PRESET_MODES
+    # But it still has a bucket (for reading back state, if a different device ever
+    # reports it) -- only removed from the settable list, not the whole model.
+    assert EoliaOperationMode.DEHUMIDIFYING in _HVAC_MODE_BUCKETS
+
+
 def test_every_hvac_mode_except_off_has_a_default_operation_mode():
     handled = set(_DEFAULT_MODE_FOR_HVAC_MODE) | {HVACMode.OFF}
     assert handled == {
