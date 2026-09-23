@@ -15,7 +15,7 @@ detail — this README is just an index pointing at the headline finding of each
 | # | What | Headline finding |
 |---|---|---|
 | 01 | Power on, `Cooling` @ 24°C | New error `E-21291-01712` (temperature out of range for an active mode) when `temperature=0.0` carries over from `Stop`. `wind_volume=0`="auto" theory supported. |
-| 02, 04 | Lockout hits | New error `E-21291-01718` — confirmed live: the **official app writes even on a no-op menu close**, locking out other clients for ~2 min. |
+| 02, 04 | Lockout hits | New error `E-21291-01718` — first theory: the **official app writes even on a no-op menu close**, locking out other clients for ~2 min. **CORRECTED later (see 37+ below)**: also reproduced through HA's own writes alone with zero other clients connected, so this isn't the whole story. |
 | 03, 05, 06 | `nanoex` off, all 3 `ai_control` values | All confirmed against the app. |
 | 07 | `KeepMode` ("double temperature setting") | Confirmed at the wire level; the low/high range is **not** in `/status` — see 16 and `findings.md` for where it actually lives. |
 | 08, 09 | `wind_volume` 0 and 1 | 0=Auto, 1="Minimal" confirmed in-app. Also: `ai_control` drifted `comfortable_econavi`→`comfortable` on its own, unexplained one-off (Kevin confirmed he didn't touch it). |
@@ -32,6 +32,7 @@ detail — this README is just an index pointing at the headline finding of each
 | 27-33 | `wind_direction_horizon` full enum | All **8 values live-confirmed**: `front` (default), `spot` (converging/focused airflow), `wide` (diverging, opposite of spot), `to_left`/`to_right` (fixed, pointing left/right), `nearby_left`/`nearby_right` (fixed, partial left/right), `auto`. Unlike the vertical axis, horizontal `auto` round-trips honestly in `/status` with no value-masking behavior observed. |
 | 34 | `ClothesDryer` ("clothes drying") | Confirmed. Requires `temperature=0.0` like Dry mode, but does **not** need `humidity` — a third category, distinct from both the cooling family (real temp) and Dry (humidity target). No AI-control option shown in the app for this mode at all. |
 | 35 | `Heating` | Confirmed. Real target temperature, same 16-30°C range as the cooling family. Closes out live confirmation of every "core" operation_mode this session set out to test. |
+| 37 | Device lockout reproduced via HA alone | During real HA integration testing (see the big session further down), the same `E-21291-01718` lockout hit twice back-to-back with **zero other clients connected** -- Kevin confirmed this directly. Combined with 02/04 (where a separate Eolia app *was* running on an AVD the whole time, revealed afterward), the picture is: a real second client can trigger it, but isn't required -- likely a write-timing cooldown (hardware protection, or unreturned `operation_token` continuity), not really about "another device" despite the error text. See 02's updated notes and 37's own file for the full reasoning. |
 
 ## Open questions still unresolved
 
@@ -48,6 +49,14 @@ detail — this README is just an index pointing at the headline finding of each
 - Whether horizontal `wind_direction_horizon=auto` has the same "API can enter but not
   leave" asymmetry the vertical axis has (see 15/18) — not yet tested (would need a
   fixed-position write while horizontal auto is active).
+- **The real mechanism behind the `E-21291-01718` ~2-minute lockout (see 02/04/37)**:
+  confirmed it's NOT strictly about a second connected client (37 reproduced it via HA
+  alone), but also confirmed a real second client (an AVD's Eolia app) genuinely was
+  present for 02/04's original occurrence. Leading theory is a write-timing cooldown --
+  possibly tied to `operation_token`, which every successful response returns but this
+  integration's requests never echo back. Untested: whether echoing the last token on
+  the next write avoids triggering it (would need a live CLI test, two writes ~15-20s
+  apart, second one including the first's `operation_token`).
 - Whether plain `Dehumidifying` (as opposed to `ComfortableDehumidification`) is a real,
   separately-selectable mode on this device at all — the app's "dehumidification" menu
   item turned out to just be `ComfortableDehumidification`; plain `Dehumidifying` was

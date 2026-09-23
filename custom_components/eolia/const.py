@@ -235,9 +235,16 @@ ERROR_CODE_TEMPERATURE_OUT_OF_RANGE = "E-21291-01712"
 # app-reachable mode on this device -- see OPERATION_MODE_DESCRIPTIONS). Same generic
 # "an application error occurred" message as 00007/01712; not distinguished further.
 ERROR_CODE_UNKNOWN_01711 = "E-21291-01711"
-# Another client wrote to the device within the last ~2 minutes -- confirmed live to be
-# triggered by the official app (even a no-op write on menu close, not just an actual
-# value change). See tests/fixtures/live_captures/02's notes.
+# "Controlled by another device, cannot change for 2 minutes" -- the literal message.
+# CORRECTED 2026-09-23: originally thought to be caused specifically by the official
+# app writing (even a no-op write on menu close), but later reproduced through the real
+# HA integration ALONE, with Kevin confirming no other app/client was connected at all
+# -- so "another device" is not a reliable read of the actual trigger. Every successful
+# write returns a fresh, never-reused `operation_token` in the response that our
+# requests never echo back; the leading theory is now that this lock is either a fixed
+# hardware/compressor cooldown between ANY two writes regardless of client, or tied to
+# not proving write continuity via that token. Not re-tested/confirmed either way yet.
+# See tests/fixtures/live_captures/02's notes and README.md's open questions.
 ERROR_CODE_DEVICE_LOCKED = "E-21291-01718"
 # double_mode_temp.high/low must be at least 5 degrees apart.
 ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW = "E-21291-02009"

@@ -250,18 +250,27 @@ this repo as a design doc if that plan file isn't available in a future session)
     debugging — pinned `pycares==4.11.0` to match; `requirements-test.txt` doesn't pin
     `pycares` directly since `aiodns==3.2.0`'s own dependency resolution handles it
     correctly from a clean install, this was only an issue because of manual reinstalls.
-  - **New confirmed device behavior — a ~2 minute cross-client write lockout**: error code
-    `E-21291-01718` ("他の機器でエアコンが制御されました。2分間変更できません" — "controlled
-    by another device, cannot change for 2 minutes"). Confirmed live and repeatedly: the
-    official app fires a real write just from opening/closing a settings menu, even with
-    *zero* value change (Kevin explicitly confirmed this — "even without changing its
-    value, the app showed a modal 'writing settings'"), and that write locks out other
-    clients (including our own CLI) for ~2 minutes. Now mapped to a dedicated
-    `EoliaDeviceLockedError` in `exceptions.py`/`api.py`. **Real implication**: any HA
-    write could transiently fail with this if the official app or physical remote was
-    touched in the last 2 minutes — not a bug, just needs a "try again shortly" UX
-    treatment rather than a generic error (not yet wired into `coordinator.py`'s handling,
-    just the exception type exists).
+  - **New confirmed device behavior — a ~2 minute write lockout, cause not fully settled**:
+    error code `E-21291-01718` ("他の機器でエアコンが制御されました。2分間変更できません" —
+    "controlled by another device, cannot change for 2 minutes"). Originally attributed
+    to the official app firing a real write just from opening/closing a settings menu
+    (Kevin confirmed a "writing settings" modal appeared with zero value change), which
+    seemed to lock out other clients for ~2 minutes. **CORRECTED 2026-09-23, during Phase
+    2 HA integration testing**: the identical lockout was reproduced through the real HA
+    integration's own writes alone, ~18 seconds apart, with Kevin explicitly confirming
+    zero other clients connected at that time — so a second client isn't strictly
+    required. (A real second client — a separate Eolia app running on an AVD — genuinely
+    was active during the original CLI-session occurrence, confirmed after the fact, so
+    that theory wasn't wrong so much as incomplete.) Current leading theory: a
+    write-timing cooldown (possibly hardware/compressor protection, or tied to the
+    `operation_token` every successful response returns but this integration's requests
+    never echo back) that any two writes close together in time can trigger, regardless
+    of whether they're really from different clients. Untested: whether echoing the last
+    `operation_token` back avoids it. Mapped to a dedicated `EoliaDeviceLockedError` in
+    `exceptions.py`/`api.py` either way — see `tests/fixtures/live_captures/02` and `37`
+    for the full investigation. **Real implication**: any HA write can transiently fail
+    with this, not necessarily tied to external app/remote use — a "try again shortly"
+    UX treatment remains the right mitigation, not a bug to chase further right now.
   - **`operation_mode=KeepMode` (the app's "double temperature setting") fully resolved
     end-to-end.** The low/high range is **not** in `/status` at all (confirmed live before
     a separate Claude session, working from the decompiled APK on a different machine,

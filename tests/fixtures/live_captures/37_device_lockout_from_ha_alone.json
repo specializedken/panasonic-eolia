@@ -1,0 +1,61 @@
+{
+  "description": "MAJOR CORRECTION to captures 02/04's theory. Captured live via the real HA integration's debug logging (not the CLI) during Kevin's UI testing session: two back-to-back writes from HA alone, ~18 seconds apart, with Kevin explicitly confirming no other app/client was connected at all. The second still hit the same E-21291-01718 lockout.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "sequence": [
+    {
+      "time": "2026-09-23T06:10:36",
+      "trigger": "climate.set_preset_mode -> ComfortableDehumidification",
+      "request": {
+        "ai_control": "off",
+        "air_flow": "not_set",
+        "airquality": false,
+        "nanoex": false,
+        "operation_mode": "ComfortableDehumidification",
+        "operation_status": true,
+        "temperature": 0.0,
+        "timer_value": 0,
+        "wind_direction": 0,
+        "wind_volume": 0,
+        "wind_direction_horizon": "auto",
+        "wind_shield_hit": "not_set",
+        "silence_control": false,
+        "humidity": 50
+      },
+      "response_status": 200,
+      "response_operation_token": "FcgiPKvLMRFnDnep (real value, redacted in write-up)"
+    },
+    {
+      "time": "2026-09-23T06:10:54",
+      "trigger": "number.set_value -> dry_humidity_target",
+      "request": {
+        "ai_control": "off",
+        "air_flow": "not_set",
+        "airquality": false,
+        "nanoex": false,
+        "operation_mode": "ComfortableDehumidification",
+        "operation_status": true,
+        "temperature": 0.0,
+        "timer_value": 0,
+        "wind_direction": 0,
+        "wind_volume": 0,
+        "wind_direction_horizon": "auto",
+        "wind_shield_hit": "not_set",
+        "silence_control": false,
+        "humidity": "(changed value)"
+      },
+      "response_status": 409,
+      "response_error": {
+        "code": "E-21291-01718",
+        "message": "他の機器でエアコンが制御されました。2分間変更できません。"
+      }
+    }
+  ],
+  "notes": [
+    "Kevin's exact words when this happened: 'The problem is that there is no other app connected right now...' -- prompted revisiting the 02/04 theory. Kevin then clarified further: during the EARLIER CLI testing session (captures 02/04 etc.), he had a SEPARATE Eolia app instance actually running on an AVD (Android emulator) the whole time -- a real second client, not previously mentioned. So the original cross-client theory was likely CORRECT for those specific occurrences. But THIS occurrence (37) is confirmed to have happened with that AVD app shut down and zero other clients connected at all.",
+    "Combined picture: a real second connected client (the AVD app) can and did cause lockouts during the CLI session. But this capture proves that's not NECESSARY -- two writes from HA ALONE, ~18s apart, triggered the identical lockout with no other client involved. The unifying explanation is likely that BOTH scenarios are instances of one real mechanism -- a cooldown/lock tied to write TIMING (any two writes within some window trigger it, whoever sends them), NOT actually about 'another device' despite the error message's wording. The AVD app being active during the CLI session doesn't rule this out; it's simply not required, as this capture shows.",
+    "Note the HTTP status was 409 this time, not the 400 seen in every earlier E-21291-01718 occurrence -- api.py's error handling matches on the `code` field regardless of status (both are >=400), so this didn't cause a bug, just a data point that the exact status code for this error isn't fixed.",
+    "Leading theory for the timing-based mechanism: every successful write response includes a freshly-generated `operation_token` (confirmed present in the 06:10:36 response) that our requests never echo back on the next write (CONTROL_REQUEST_FIELDS/to_control_fields() don't include it at all -- a deliberate, tested decision from the original findings.md 'RESOLVED' investigation, where including operation_token made no difference to whether writes succeeded at the time). Two candidate explanations: (a) a fixed hardware/compressor-protection cooldown between ANY two writes to the physical unit, independent of client identity -- 'another device' would just be generic/inaccurate wording; (b) the server wants the last operation_token echoed back within some window to prove write continuity, and any two writes ~18s apart without it look like uncoordinated clients even when it's really one.",
+    "Not yet tested: whether echoing back the last-received operation_token on the next write avoids this lockout. Would need a live CLI test (two writes ~15-20s apart, second one including operation_token from the first's response) to distinguish theory (a) from (b).",
+    "Practical impact either way: the coordinator has no way to detect this proactively, so EoliaDeviceLockedError staying a distinct, clearly-labeled exception (rather than a generic error) remains the right mitigation for now -- the user just needs to know 'wait and retry' is expected, not a bug."
+  ]
+}
