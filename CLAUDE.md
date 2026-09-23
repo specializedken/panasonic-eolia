@@ -516,14 +516,18 @@ this repo as a design doc if that plan file isn't available in a future session)
     within 5 degrees of the other (`E-21291-02009`) moves the other bound to keep the gap
     when that stays in range (low 16-25, high 21-30). Confirmed live (high 27->26 moved low
     22->21). The `02009` error message is translated to English too.
-  - **Still-untested combinations** (ranked; the first two are now done): double-temp low/high changes while `KeepMode`
+  - **`Nanoe` is a readback only, so any write made while the unit reads `Nanoe` failed**
+    (`E-21291-01711`): turning nanoeX off in `Nanoe` re-sent `operation_mode: Nanoe`.
+    `coordinator` now sends `Blast` whenever the current mode reads `Nanoe`. Confirmed live
+    both ways: Blast + nanoeX on -> `Nanoe` (`200`), nanoeX off -> `Blast` (`200`).
+  - **Still-untested combinations** (ranked; the first two and the nanoeX one are done): double-temp low/high changes while `KeepMode`
     is on (and the >=5 gap from two separate sliders); settings the app hides per mode
     (fan speed in Dry/ClothesDryer, `ai_control` in ClothesDryer/Blast, louvers in
     KeepMode, `air_flow`/shield-hit in the clean modes); changing settings during a clean
     mode (the "AC is off" guard fires); nanoeX toggling around `Nanoe`; `CoolDehumidifying`
     through HA; first write after an HA restart (in-memory `operation_token`/
     `silence_control`/humidity caches lost); token refresh; multiple devices.
-  - 182 tests now (up from 132 at the start of this pass).
+  - 183 tests now (up from 132 at the start of this pass).
 - **Next step**: resume the live "impossible combinations" audit -- systematically drive
   every remaining `operation_mode`/field combination through the real HA UI while
   watching `docker logs -f homeassistant | grep -i eolia` (the debug logger is still on

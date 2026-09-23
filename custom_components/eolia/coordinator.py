@@ -285,6 +285,12 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         else:
             payload.pop("humidity", None)
 
+        # Nanoe is only ever a readback (Blast with nanoeX on); sending it back is rejected
+        # with E-21291-01711 (live 2026-09-23: turning nanoeX off while in Nanoe, so ANY
+        # write made while the unit reads Nanoe failed). The nanoex field decides the rest.
+        if payload["operation_mode"] == EoliaOperationMode.NANOE:
+            payload["operation_mode"] = EoliaOperationMode.BLAST.value
+
         try:
             new_status = await self.api.async_set_status(appliance_id, payload)
         except (EoliaApiError, EoliaAuthError) as err:

@@ -613,6 +613,20 @@ async def test_lockout_error_explains_the_two_minute_rule_on_both_write_paths(
         await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_low=22)
 
 
+async def test_writes_while_in_nanoe_send_blast_instead(coordinator, initial_status):
+    # Live 2026-09-23: turning nanoeX off while the unit read Nanoe sent operation_mode=Nanoe
+    # and was rejected (E-21291-01711). Nanoe is a readback only.
+    nanoe = _status_with_mode(initial_status, "Nanoe")
+    coordinator.async_set_updated_data({APPLIANCE_ID: nanoe})
+    coordinator.api.async_set_status.return_value = _status_with_mode(nanoe, "Blast")
+
+    await coordinator.async_set_status(APPLIANCE_ID, nanoex=False)
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["operation_mode"] == "Blast"
+    assert payload["nanoex"] is False
+
+
 async def test_get_humidity_defaults_to_lowest_confirmed_value(coordinator):
     assert coordinator.get_humidity(APPLIANCE_ID) == 50
 
