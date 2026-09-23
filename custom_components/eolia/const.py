@@ -157,7 +157,9 @@ OPERATION_MODE_DESCRIPTIONS: dict[str, str] = {
     "AutoTempControl": (
         "\"Leave it to us\" auto temperature control (おまかせ温"
         "度制御). AI-adjusted target temperature using outdoor-temperature "
-        "correction; not independently researched against official docs."
+        "correction; not independently researched against official docs. NOT selectable via "
+        "the API as far as we can tell -- live 2026-09-23, a real temperature gets "
+        "E-21291-01712 and 0.0 gets E-21291-00007; the real contract is unknown."
     ),
     "KeepMode": (
         "\"Double temperature setting\" (ダブル温度設定). "
@@ -331,6 +333,13 @@ PROVISIONAL_TEMPERATURE_STEP = 1.0
 # invalid 0.0. Just a reasonable default (room temperature), not sourced from Panasonic
 # documentation -- there is no "right" answer for a temperature the user never chose.
 FALLBACK_TEMPERATURE = 24.0
+
+# operation_modes with no user-settable target temperature: the server wants 0.0 and
+# rejects anything else with E-21291-01712. Both live-confirmed 2026-09-23.
+NO_TARGET_TEMPERATURE_MODES = (
+    EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION,
+    EoliaOperationMode.CLOTHES_DRYER,
+)
 
 # --- KeepMode ("double temperature setting") -- /customsettings -----------------------
 # Separate resource from /status -- see findings.md's "KeepMode / double temperature

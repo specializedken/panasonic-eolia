@@ -451,12 +451,28 @@ this repo as a design doc if that plan file isn't available in a future session)
     since the failure mode here is "clear error, real state still gets cached" rather
     than "hard rejection" -- same design choice as `KeepMode`'s double-temp mismatch
     check.
-  - 142 tests now (up from 132 at the start of this pass).
+  - **`KeepMode` is entered via `/customsettings`, not `/status`.** Setting
+    `operation_mode=KeepMode` on `/status` is always rejected (`E-21291-01711`); the mode
+    is entered by writing `double_mode_temp.status=true` (with a valid >=5 degree range)
+    on `/customsettings`, which also powers the unit on -- and writing `status=false`
+    powers it off (`Stop`). The range is only stored while the setting is on: the server
+    returns `200` but silently discards high/low (returns `0/0`) if `status=true` isn't
+    in the same write, which is why the range "reset to 0/0" outside `KeepMode`.
+    `climate.py` now routes the `KeepMode` preset through `async_set_custom_settings`;
+    `coordinator.py` fills a default 23/28 range when enabling with none, fills the
+    missing bound when only one is set, and no longer flags the expected range reset when
+    turning it off (a false-positive of the mismatch check, found live). New errors:
+    `E-21291-02006` (invalid range, e.g. `high=0, low=16`).
+  - **`AutoTempControl` not selectable**: a real `25.0` gets `E-21291-01712`, `0.0` gets
+    `E-21291-00007` -- real contract unknown (decompiled APK might show it). Excluded.
+  - **Unexplained**: Kevin reported the unit turning on at ~14:06 while the cloud
+    reported `Stop` and only rejected/`status=false` writes had been sent. Unresolved.
+  - 151 tests now (up from 132 at the start of this pass).
 - **Next step**: resume the live "impossible combinations" audit -- systematically drive
   every remaining `operation_mode`/field combination through the real HA UI while
   watching `docker logs -f homeassistant | grep -i eolia` (the debug logger is still on
   for exactly this). Not yet exercised this way: `SmellCare`/`SmellCareSpot`/
-  `NanoexCleaning`/`Cleaning`/`Auto`/`AutoTempControl`/`KeepMode` combined with
+  `NanoexCleaning`/`Cleaning`/`Auto` combined with
   nanoex/ai_control/silence_control in various combinations, and the double-temperature
   (`KeepMode`) and Dry-humidity number entities haven't been exercised live through HA
   yet either (only unit-tested + confirmed via the CLI previously). Also still open: the

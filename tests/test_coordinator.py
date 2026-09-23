@@ -389,6 +389,64 @@ async def test_operation_mode_mismatch_not_checked_when_mode_wasnt_explicitly_re
     assert coordinator.data[APPLIANCE_ID] is nanoe_status
 
 
+@pytest.mark.parametrize(
+    ("changes", "expected"),
+    [
+        ({"double_mode_temp_low": 16}, {"high": 21, "low": 16}),
+        ({"double_mode_temp_low": 22}, {"high": 27, "low": 22}),
+        ({"double_mode_temp_low": 25}, {"high": 30, "low": 25}),
+        ({"double_mode_temp_high": 28}, {"high": 28, "low": 23}),
+        ({"double_mode_temp_high": 21}, {"high": 21, "low": 16}),
+    ],
+)
+async def test_setting_one_double_temp_bound_fills_the_unset_other_bound(
+    coordinator, changes, expected
+):
+    # Live-confirmed 2026-09-23: the range resets to 0/0 outside KeepMode, and sending
+    # e.g. high=0/low=16 was rejected with E-21291-02006.
+    unset = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": False, "high": 0, "low": 0}, "peak_cut": 100}
+    )
+    coordinator.custom_settings[APPLIANCE_ID] = unset
+    coordinator.api.async_set_custom_settings.return_value = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": False, **expected}, "peak_cut": 100}
+    )
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, **changes)
+
+    _, payload = coordinator.api.async_set_custom_settings.call_args.args
+    assert payload["double_mode_temp"] == {"status": False, **expected}
+
+
+async def test_turning_double_temp_on_with_no_range_sends_a_default_range(coordinator):
+    # Live-confirmed 2026-09-23: high/low are silently discarded unless status=True is
+    # sent in the same write.
+    coordinator.custom_settings[APPLIANCE_ID] = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": False, "high": 0, "low": 0}, "peak_cut": 100}
+    )
+    coordinator.api.async_set_custom_settings.return_value = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": True, "high": 28, "low": 23}, "peak_cut": 100}
+    )
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=True)
+
+    _, payload = coordinator.api.async_set_custom_settings.call_args.args
+    assert payload["double_mode_temp"] == {"status": True, "high": 28, "low": 23}
+
+
+async def test_turning_double_temp_off_does_not_flag_the_expected_range_reset(coordinator):
+    # Live-confirmed 2026-09-23: turning it off returns status False with the range
+    # zeroed, which is not a rejection.
+    coordinator.custom_settings[APPLIANCE_ID] = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": True, "high": 28, "low": 23}, "peak_cut": 100}
+    )
+    coordinator.api.async_set_custom_settings.return_value = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": False, "high": 0, "low": 0}, "peak_cut": 100}
+    )
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=False)
+
+
 async def test_get_humidity_defaults_to_lowest_confirmed_value(coordinator):
     assert coordinator.get_humidity(APPLIANCE_ID) == 50
 

@@ -25,6 +25,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import EoliaConfigEntry
 from .const import (
+    NO_TARGET_TEMPERATURE_MODES,
     PROVISIONAL_TEMPERATURE_STEP,
     WIND_DIRECTION_LEVELS,
     WIND_VOLUME_LEVELS,
@@ -86,26 +87,20 @@ _DEFAULT_MODE_FOR_HVAC_MODE: dict[HVACMode, EoliaOperationMode] = {
 # NANOE is excluded for a different reason: it's not a mode the API can be asked for at
 # all -- live-confirmed 2026-09-23, the server substitutes it automatically for Blast
 # when nanoex is on, so it's only ever reachable indirectly (see const.py).
+# AUTO_TEMP_CONTROL is excluded because no payload tried so far is accepted: a real 25.0
+# gets E-21291-01712 (temperature out of range) and 0.0 gets E-21291-00007 (malformed),
+# both live 2026-09-23 via the HA dropdown -- the real request contract is unknown.
 _UNSETTABLE_PRESET_MODES = (
     EoliaOperationMode.STOP,
     EoliaOperationMode.OTHER,
     EoliaOperationMode.DEHUMIDIFYING,
     EoliaOperationMode.KEEP_HEATING,
     EoliaOperationMode.NANOE,
+    EoliaOperationMode.AUTO_TEMP_CONTROL,
 )
 _SETTABLE_PRESET_MODES = [
     mode.value for mode in EoliaOperationMode if mode not in _UNSETTABLE_PRESET_MODES
 ]
-
-# These two modes have no user-settable temperature at all (coordinator.py forces
-# temperature=0.0 into the payload for both regardless of what's asked). Guarded here so
-# a temperature-slider drag while in either mode raises a clear error instead of getting
-# a silent 200 OK that changes nothing -- live-confirmed 2026-09-23 via the real HA
-# integration: dragging the slider in Dry mode produced exactly that silent no-op.
-_NO_TARGET_TEMPERATURE_MODES = (
-    EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION,
-    EoliaOperationMode.CLOTHES_DRYER,
-)
 
 _SWING_HORIZONTAL_MODES = [mode.value for mode in EoliaWindDirectionHorizon]
 _FAN_MODES = [str(level) for level in WIND_VOLUME_LEVELS]
@@ -235,6 +230,14 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
         )
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
+        if preset_mode == EoliaOperationMode.KEEP_MODE:
+            # Live-confirmed 2026-09-23: operation_mode=KeepMode via /status is always
+            # rejected (E-21291-01711). The mode is entered by enabling
+            # double_mode_temp.status on /customsettings, which also powers the unit on.
+            await self.coordinator.async_set_custom_settings(
+                self._appliance_id, double_mode_temp_status=True
+            )
+            return
         await self.coordinator.async_set_status(
             self._appliance_id, operation_status=True, operation_mode=preset_mode
         )
@@ -245,7 +248,7 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
             return
         self._require_powered_on("change the target temperature")
         status = self._status
-        if status is not None and status.operation_mode in _NO_TARGET_TEMPERATURE_MODES:
+        if status is not None and status.operation_mode in NO_TARGET_TEMPERATURE_MODES:
             raise HomeAssistantError(
                 f"{status.operation_mode} doesn't support a target temperature -- "
                 + (

@@ -24,8 +24,11 @@ from .api import EoliaApiClient
 from .const import (
     DEFAULT_SCAN_INTERVAL_SECONDS,
     DOMAIN,
+    DOUBLE_MODE_TEMP_HIGH_RANGE,
+    DOUBLE_MODE_TEMP_LOW_RANGE,
     DRY_MODE_HUMIDITY_RANGE,
     FALLBACK_TEMPERATURE,
+    NO_TARGET_TEMPERATURE_MODES,
     EoliaOperationMode,
 )
 from .exceptions import EoliaApiError, EoliaAuthError, EoliaClockSkewError, EoliaNetworkError
@@ -184,10 +187,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # temperature request dropped without knowing why (see climate.py's
         # _NO_TARGET_TEMPERATURE_MODES guard, which raises before this is ever reached
         # for a direct temperature-only write).
-        if payload["operation_mode"] in (
-            EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION,
-            EoliaOperationMode.CLOTHES_DRYER,
-        ):
+        if payload["operation_mode"] in NO_TARGET_TEMPERATURE_MODES:
             payload["temperature"] = 0.0
         elif payload["temperature"] == 0.0 and "temperature" not in changes:
             # The mirror-image bug, live-confirmed 2026-09-23: switching AWAY from
@@ -273,6 +273,30 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
             double_mode_temp["high"] = changes.pop("double_mode_temp_high")
         if "double_mode_temp_low" in changes:
             double_mode_temp["low"] = changes.pop("double_mode_temp_low")
+        # Live-confirmed 2026-09-23: the server silently discards high/low (returns 0/0
+        # with a 200) unless status=True is sent in the SAME write, so turning the setting
+        # on with no range yet must send a valid default range along with it. 23/28 are the
+        # values the official app itself had saved (tests/fixtures/live_captures/07).
+        if (
+            double_mode_temp["status"]
+            and double_mode_temp["high"] == 0
+            and double_mode_temp["low"] == 0
+        ):
+            double_mode_temp["low"], double_mode_temp["high"] = 23, 28
+        # The range resets to 0/0 whenever the unit leaves KeepMode, and each number entity
+        # only changes one bound -- so setting either bound alone always sent an invalid
+        # range (e.g. high=0, low=16 -> E-21291-02006), live-confirmed 2026-09-23. Fill the
+        # untouched, still-unset bound with the nearest valid value that keeps the >=5 gap.
+        if double_mode_temp["high"] == 0 and double_mode_temp["low"] != 0:
+            double_mode_temp["high"] = min(
+                DOUBLE_MODE_TEMP_HIGH_RANGE[1],
+                max(DOUBLE_MODE_TEMP_HIGH_RANGE[0], double_mode_temp["low"] + 5),
+            )
+        elif double_mode_temp["low"] == 0 and double_mode_temp["high"] != 0:
+            double_mode_temp["low"] = max(
+                DOUBLE_MODE_TEMP_LOW_RANGE[0],
+                min(DOUBLE_MODE_TEMP_LOW_RANGE[1], double_mode_temp["high"] - 5),
+            )
         payload["double_mode_temp"] = double_mode_temp
         payload.update(changes)  # e.g. peak_cut, if ever needed
 
@@ -296,11 +320,17 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # just report the new (wrong) value as if the write succeeded. Cache the
         # actual returned truth above regardless (so is_on etc. stay correct even
         # when this fires), then surface the mismatch as a real error.
-        if new_settings.double_mode_temp.to_dict() != double_mode_temp:
+        # Turning the setting OFF legitimately zeroes the range (live-confirmed
+        # 2026-09-23), so only the status is comparable then.
+        returned = new_settings.double_mode_temp.to_dict()
+        if not double_mode_temp["status"]:
+            mismatch = returned["status"] != double_mode_temp["status"]
+        else:
+            mismatch = returned != double_mode_temp
+        if mismatch:
             raise HomeAssistantError(
                 "Eolia accepted the request but didn't apply it as asked (got back "
                 f"{new_settings.double_mode_temp.to_dict()!r}, requested "
-                f"{double_mode_temp!r}). This usually means the low/high range needs "
-                "to be set to a valid temperature range (at least 5 degrees apart) "
-                "before turning the double-temperature setting on."
+                f"{double_mode_temp!r}). The low/high range is only stored while the "
+                "double-temperature setting is on, and must be at least 5 degrees apart."
             )

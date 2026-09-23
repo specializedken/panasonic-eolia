@@ -77,6 +77,13 @@ def test_keep_heating_is_not_a_settable_preset():
     assert EoliaOperationMode.KEEP_HEATING in _HVAC_MODE_BUCKETS
 
 
+def test_auto_temp_control_is_not_a_settable_preset():
+    # Live-confirmed 2026-09-23 via the HA dropdown: a real 25.0 gets E-21291-01712 and
+    # 0.0 gets E-21291-00007 -- no payload tried is accepted, so it's excluded.
+    assert EoliaOperationMode.AUTO_TEMP_CONTROL.value not in _SETTABLE_PRESET_MODES
+    assert EoliaOperationMode.AUTO_TEMP_CONTROL in _HVAC_MODE_BUCKETS
+
+
 def test_nanoe_is_recognized_but_not_a_settable_preset():
     # Live-confirmed 2026-09-23: sending operation_mode=Blast with nanoex=True gets
     # silently substituted server-side for this instead (reproduced twice, independent
@@ -248,3 +255,18 @@ async def test_set_temperature_proceeds_in_a_normal_mode(coordinator):
     await entity.async_set_temperature(**{ATTR_TEMPERATURE: 24.0})
 
     coordinator.api.async_set_status.assert_awaited_once()
+
+
+async def test_keep_mode_preset_is_routed_through_customsettings(coordinator):
+    # Live-confirmed 2026-09-23: /status operation_mode=KeepMode is always rejected;
+    # the mode is entered by enabling double_mode_temp.status on /customsettings.
+    coordinator.async_set_updated_data({APPLIANCE_ID: _status(operation_status=False)})
+    coordinator.async_set_custom_settings = AsyncMock()
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_set_preset_mode(EoliaOperationMode.KEEP_MODE.value)
+
+    coordinator.async_set_custom_settings.assert_awaited_once_with(
+        APPLIANCE_ID, double_mode_temp_status=True
+    )
+    coordinator.api.async_set_status.assert_not_awaited()
