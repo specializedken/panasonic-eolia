@@ -31,6 +31,7 @@ detail — this README is just an index pointing at the headline finding of each
 | 26 | `Blast` ("Air blower") | Confirmed as the app's fan-only mode -- no temperature control shown in the app (its `temperature` field is just an inert carried-over value). Normal (non-auto-reset) fan/louver controls, unlike Dry/KeepMode. |
 | 27-33 | `wind_direction_horizon` full enum | All **8 values live-confirmed**: `front` (default), `spot` (converging/focused airflow), `wide` (diverging, opposite of spot), `to_left`/`to_right` (fixed, pointing left/right), `nearby_left`/`nearby_right` (fixed, partial left/right), `auto`. Unlike the vertical axis, horizontal `auto` round-trips honestly in `/status` with no value-masking behavior observed. |
 | 34 | `ClothesDryer` ("clothes drying") | Confirmed. Requires `temperature=0.0` like Dry mode, but does **not** need `humidity` — a third category, distinct from both the cooling family (real temp) and Dry (humidity target). No AI-control option shown in the app for this mode at all. |
+| 35 | `Heating` | Confirmed. Real target temperature, same 16-30°C range as the cooling family. Closes out live confirmation of every "core" operation_mode this session set out to test. |
 
 ## Open questions still unresolved
 

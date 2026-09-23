@@ -1,0 +1,42 @@
+{
+  "description": "operation_mode=Heating, confirmed live -- real target temperature, same 16-30C range as Cooling/CoolDehumidifying/MoistCooling.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Heating",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 0,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Heating",
+    "ai_control": "off",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 20.5,
+    "inside_humidity": 70,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows Heating mode active at 24C, app's stated range for this mode is 16-30C (same as the cooling-family modes).",
+  "notes": [
+    "CONFIRMED: EoliaOperationMode.HEATING wire value round-trips correctly, real settable target temperature, same range as Cooling/CoolDehumidifying/MoistCooling.",
+    "This closes out live confirmation of every 'core' operation_mode this session set out to test: Cooling, CoolDehumidifying, ComfortableDehumidification (Dry), MoistCooling, ClothesDryer, Blast, Heating, plus KeepMode from a parallel session. Remaining untested/unconfirmed: KeepHeating, AutoTempControl, SmellCare, SmellCareSpot, NanoexCleaning, Cleaning, Auto, Dehumidifying (plain) -- all niche/utility modes not part of Kevin's original confusion about the cooling/dehumidify family."
+  ]
+}
