@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.eolia.const import CONTROL_REQUEST_FIELDS, CUSTOM_SETTINGS_REQUEST_FIELDS
 from custom_components.eolia.coordinator import EoliaDataUpdateCoordinator
@@ -203,11 +204,44 @@ async def test_set_custom_settings_fetches_first_if_no_cached_data(
     coordinator, initial_custom_settings
 ):
     coordinator.api.async_get_custom_settings.return_value = initial_custom_settings
-    coordinator.api.async_set_custom_settings.return_value = initial_custom_settings
+    # Response must actually reflect the requested change (high=27), or the new
+    # request-vs-response mismatch check below fires -- see
+    # test_set_custom_settings_raises_when_server_silently_ignores_the_change.
+    new_settings = EoliaCustomSettings.from_dict(
+        {
+            "double_mode_temp": {"status": True, "high": 27, "low": 23},
+            "peak_cut": initial_custom_settings.peak_cut,
+        }
+    )
+    coordinator.api.async_set_custom_settings.return_value = new_settings
 
     await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_high=27)
 
     coordinator.api.async_get_custom_settings.assert_awaited_once_with(APPLIANCE_ID)
+
+
+async def test_set_custom_settings_raises_when_server_silently_ignores_the_change(
+    coordinator, initial_custom_settings
+):
+    # Live-confirmed 2026-09-23: the server can return 200 OK while silently NOT
+    # applying part of the request (e.g. accepting status=True but keeping it False
+    # when high/low are still 0/0) -- no error code at all.
+    coordinator.custom_settings[APPLIANCE_ID] = initial_custom_settings
+    unchanged_settings = EoliaCustomSettings.from_dict(
+        {
+            "double_mode_temp": {"status": False, "high": 0, "low": 0},
+            "peak_cut": 100,
+        }
+    )
+    coordinator.api.async_set_custom_settings.return_value = unchanged_settings
+
+    with pytest.raises(HomeAssistantError, match="didn't apply it as asked"):
+        await coordinator.async_set_custom_settings(
+            APPLIANCE_ID, double_mode_temp_status=True
+        )
+
+    # The actual (unchanged) truth must still be cached, so is_on etc. stay correct.
+    assert coordinator.custom_settings[APPLIANCE_ID] is unchanged_settings
 
 
 # --- Dry mode (ComfortableDehumidification) humidity handling --------------------------

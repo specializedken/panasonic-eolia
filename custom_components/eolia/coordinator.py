@@ -201,3 +201,19 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
 
         self.custom_settings[appliance_id] = new_settings
         self.async_update_listeners()
+
+        # Live-confirmed 2026-09-23: the server can return 200 while silently NOT
+        # applying part of the request (e.g. accepting double_mode_temp.status=True
+        # but keeping it False when high/low are still the 0/0 leftover from a
+        # previous session) -- no error code, so without this check the entity would
+        # just report the new (wrong) value as if the write succeeded. Cache the
+        # actual returned truth above regardless (so is_on etc. stay correct even
+        # when this fires), then surface the mismatch as a real error.
+        if new_settings.double_mode_temp.to_dict() != double_mode_temp:
+            raise HomeAssistantError(
+                "Eolia accepted the request but didn't apply it as asked (got back "
+                f"{new_settings.double_mode_temp.to_dict()!r}, requested "
+                f"{double_mode_temp!r}). This usually means the low/high range needs "
+                "to be set to a valid temperature range (at least 5 degrees apart) "
+                "before turning the double-temperature setting on."
+            )
