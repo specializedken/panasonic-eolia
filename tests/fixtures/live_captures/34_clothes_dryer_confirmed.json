@@ -1,0 +1,44 @@
+{
+  "description": "operation_mode=ClothesDryer, confirmed. Like ComfortableDehumidification, rejects a real temperature (E-21291-01712 with temperature=20.0) and requires temperature=0.0 -- but unlike ComfortableDehumidification, no humidity field was sent here and the write still succeeded, so ClothesDryer does NOT appear to need the humidity exception.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "ClothesDryer",
+    "operation_status": true,
+    "temperature": 0.0,
+    "timer_value": 0,
+    "wind_direction": 5,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "ClothesDryer",
+    "ai_control": "off",
+    "temperature": 0.0,
+    "wind_volume": 0,
+    "wind_direction": 5,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 22.0,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows clothes-drying mode active. No temperature control shown, no AI control option shown, nanoeX off.",
+  "notes": [
+    "CONFIRMED: EoliaOperationMode.CLOTHES_DRYER wire value matches the app's clothes-drying mode.",
+    "Requires temperature=0.0 like ComfortableDehumidification (real value 20.0 was rejected with the same E-21291-01712 as before), but does NOT require the humidity field -- succeeded without it. So this mode is 'no temperature target' but NOT 'humidity target' -- a third category distinct from both the Cooling-family (real temp) and Dry (humidity target).",
+    "Kevin reports the app shows no AI-control option at all for this mode (not just off, but unavailable) -- consistent with a genuinely fan/utility-style mode. Untested whether ai_control being present-but-off in the payload vs. omitted matters; current payload just carries over off from cached state and it worked fine.",
+    "This mode is bucketed under HVACMode.DRY in climate.py (grouped with Dehumidifying/ComfortableDehumidification) -- still a defensible coarse-bucket choice for HA's UI even though the underlying mechanism (no temp, no humidity, just airflow) is closer to Blast's fan-only behavior than to Dry's humidity-target behavior. No code change made; flagging for awareness only."
+  ]
+}
