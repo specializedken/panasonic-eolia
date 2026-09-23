@@ -211,24 +211,6 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
             self._appliance_id, operation_status=True, operation_mode=preset_mode
         )
 
-    def _require_powered_on(self, action: str) -> None:
-        """Raise a clear error instead of letting the server's opaque one through.
-
-        Confirmed live 2026-09-23: the API rejects temperature/fan/swing changes while
-        `operation_status` is False (unit off) with a generic, unhelpful
-        E-21291-01711 ("an application error occurred"). `preset_mode`/`hvac_mode`
-        already sidestep this by forcing `operation_status=True` alongside their own
-        change (mirroring how the physical remote/app work: picking a mode turns the
-        unit on), but temperature/fan/swing have no mode of their own to piggyback
-        that on, so they're guarded here instead rather than also implicitly powering
-        the unit on as a surprising side effect.
-        """
-        status = self._status
-        if status is not None and not status.operation_status:
-            raise HomeAssistantError(
-                f"Can't {action} while the AC is off -- turn it on first."
-            )
-
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:

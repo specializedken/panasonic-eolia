@@ -15,7 +15,6 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import EoliaConfigEntry
@@ -100,29 +99,14 @@ class EoliaSwitch(EoliaEntity, SwitchEntity):
             return None
         return self.entity_description.is_on_fn(self.coordinator, self._appliance_id)
 
-    def _require_powered_on(self) -> None:
-        """Raise a clear error instead of letting the server's opaque one through.
-
-        Live-confirmed 2026-09-23 via the real HA integration: the API rejects any
-        /status field change (not just fan/swing/temperature -- nanoex too) while
-        operation_status is False (unit off), with a generic, unhelpful E-21291-01711.
-        See climate.py's _require_powered_on for the first occurrence of this.
-        """
-        status = self._status
-        if status is not None and not status.operation_status:
-            raise HomeAssistantError(
-                f"Can't change {self.entity_description.key} while the AC is off -- "
-                "turn it on first."
-            )
-
     async def async_turn_on(self, **kwargs: Any) -> None:
-        self._require_powered_on()
+        self._require_powered_on(f"turn on {self.entity_description.key}")
         await self.coordinator.async_set_status(
             self._appliance_id, **{self.entity_description.control_field: True}
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        self._require_powered_on()
+        self._require_powered_on(f"turn off {self.entity_description.key}")
         await self.coordinator.async_set_status(
             self._appliance_id, **{self.entity_description.control_field: False}
         )

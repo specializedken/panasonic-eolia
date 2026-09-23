@@ -91,6 +91,7 @@ class EoliaSelect(EoliaEntity, SelectEntity):
         return self.entity_description.current_option_fn(status) if status else None
 
     async def async_select_option(self, option: str) -> None:
+        self._require_powered_on(f"change {self.entity_description.key}")
         await self.coordinator.async_set_status(
             self._appliance_id, **{self.entity_description.control_field: option}
         )
