@@ -65,6 +65,14 @@ class EoliaOperationMode(StrEnum):
     HEATING = "Heating"
     KEEP_HEATING = "KeepHeating"
     BLAST = "Blast"
+    # Not a directly-settable wire value -- discovered live 2026-09-23: sending
+    # operation_mode=Blast with nanoex=True gets silently substituted server-side for
+    # this instead (reproduced twice, independent of ai_control). Modeled here so it
+    # reads back correctly (real hvac_mode/preset_mode instead of falling into the
+    # "unknown mode" warning + OFF-bucket fallback) but deliberately excluded from
+    # climate.py's settable preset list -- reach it via Blast + the nanoex switch, not
+    # by picking it directly.
+    NANOE = "Nanoe"
     DEHUMIDIFYING = "Dehumidifying"
     COOL_DEHUMIDIFYING = "CoolDehumidifying"
     COMFORTABLE_DEHUMIDIFICATION = "ComfortableDehumidification"
@@ -104,11 +112,19 @@ OPERATION_MODE_DESCRIPTIONS: dict[str, str] = {
     "Heating": "Standard heating. Targets a set temperature.",
     "KeepHeating": (
         "Heating with the fan kept running continuously (no warm-up standby pause), "
-        "to avoid a draft of cool air while the unit is heating up."
+        "to avoid a draft of cool air while the unit is heating up. NOT selectable via "
+        "the API on this device -- live-confirmed 2026-09-23, rejected with "
+        "E-21291-01711 (the same generic-error code plain Dehumidifying hits) despite "
+        "an otherwise-valid payload. See ERROR_CODE_UNKNOWN_01711 below."
     ),
     "Blast": (
         "Fan only -- circulates air without heating, cooling, or dehumidifying. "
         "No temperature control."
+    ),
+    "Nanoe": (
+        "Blast (fan-only) with nanoeX enabled -- not directly selectable, the server "
+        "substitutes this automatically when nanoex is turned on while in Blast mode. "
+        "Select Blast and use the nanoeX switch instead of picking this directly."
     ),
     "Dehumidifying": (
         "Generic dehumidify wire value. Never confirmed as an actual app-reachable "
@@ -231,9 +247,13 @@ ERROR_CODE_SYSTEM_ERROR = "E-21291-00000"
 # also with a real nonzero temperature sent while switching into a mode -- like
 # ComfortableDehumidification/ClothesDryer -- that requires 0.0 instead).
 ERROR_CODE_TEMPERATURE_OUT_OF_RANGE = "E-21291-01712"
-# Seen once, switching directly to plain Dehumidifying (never confirmed as a real
-# app-reachable mode on this device -- see OPERATION_MODE_DESCRIPTIONS). Same generic
-# "an application error occurred" message as 00007/01712; not distinguished further.
+# Seen for two operation_mode values so far, each with an otherwise-valid payload:
+# plain Dehumidifying, and (live-confirmed 2026-09-23 via the real HA integration)
+# KeepHeating -- neither ever confirmed as a real app-reachable mode on this device (see
+# OPERATION_MODE_DESCRIPTIONS). Both excluded from climate.py's settable preset list as
+# a result. Same generic "an application error occurred" message as 00007/01712; not
+# distinguished further -- likely per-device capability gating (see findings.md's
+# ExclusionStrategy note) rather than a payload-shape problem.
 ERROR_CODE_UNKNOWN_01711 = "E-21291-01711"
 # "Controlled by another device, cannot change for 2 minutes" -- the literal message,
 # but RESOLVED 2026-09-23 to not really be about "another device": a controlled A/B
@@ -299,6 +319,18 @@ WIND_DIRECTION_SWING = 6
 # Temperature step is unconfirmed (the single live capture, 20.0, doesn't disambiguate
 # 0.5 vs 1.0 steps). Default to whole degrees; validate on first live control test.
 PROVISIONAL_TEMPERATURE_STEP = 1.0
+
+# Live-confirmed 2026-09-23 via the real HA integration: switching operation_mode away
+# from ComfortableDehumidification/ClothesDryer (both forced to temperature=0.0, see
+# coordinator.py) into a real-temperature mode like Cooling reproduces the exact
+# "temperature=0.0 carried over into an active mode" scenario ERROR_CODE_TEMPERATURE_
+# OUT_OF_RANGE's comment already described in the abstract -- confirmed live via
+# climate.set_preset_mode Dry->Cooling with no explicit temperature given, which failed
+# with E-21291-01712. coordinator.py substitutes this (or a cached last-real-temperature
+# value, if one's been observed) whenever a mode switch would otherwise carry over an
+# invalid 0.0. Just a reasonable default (room temperature), not sourced from Panasonic
+# documentation -- there is no "right" answer for a temperature the user never chose.
+FALLBACK_TEMPERATURE = 24.0
 
 # --- KeepMode ("double temperature setting") -- /customsettings -----------------------
 # Separate resource from /status -- see findings.md's "KeepMode / double temperature

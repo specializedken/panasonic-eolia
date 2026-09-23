@@ -45,6 +45,7 @@
               "Heating": "Heating",
               "KeepHeating": "Heating (continuous fan)",
               "Blast": "Fan only",
+              "Nanoe": "Fan only (nanoeX)",
               "Dehumidifying": "Dehumidify",
               "CoolDehumidifying": "Cool & Dehumidify",
               "ComfortableDehumidification": "Dry (comfort dehumidify)",

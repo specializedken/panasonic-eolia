@@ -21,6 +21,19 @@ from custom_components.eolia.models import EoliaCustomSettings, EoliaDevice, Eol
 APPLIANCE_ID = "EXAMPLEAPPLIANCEID0000000000000000000000000="
 
 
+def _status_with_mode(base: EoliaStatus, operation_mode: str) -> EoliaStatus:
+    """A copy of `base` with operation_mode overridden -- keeps mocked API responses
+    consistent with what was actually requested, since async_set_status now checks for a
+    mismatch (see the "Silent operation_mode substitution/rejection" tests below)."""
+    return EoliaStatus.from_dict(
+        {
+            **base.to_control_fields(),
+            "appliance_id": base.appliance_id,
+            "operation_mode": operation_mode,
+        }
+    )
+
+
 @pytest.fixture
 def device() -> EoliaDevice:
     return EoliaDevice(
@@ -122,7 +135,7 @@ async def test_silence_control_has_no_readback_and_is_cached_locally(
 
     # An unrelated later write must still resend the cached silence_control value,
     # since the field is write-only and never comes back on a GET.
-    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Heating")
+    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Cooling")
     _, payload2 = coordinator.api.async_set_status.call_args.args
     assert payload2["silence_control"] is True
 
@@ -137,6 +150,18 @@ async def test_update_data_also_fetches_custom_settings(
 
     coordinator.api.async_get_custom_settings.assert_awaited_once_with(APPLIANCE_ID)
     assert coordinator.custom_settings[APPLIANCE_ID] is initial_custom_settings
+
+
+async def test_update_data_remembers_a_real_temperature_from_a_poll(
+    coordinator, new_status
+):
+    # new_status (control_response fixture) is Cooling @ 20.0 -- a real, nonzero temp.
+    coordinator.api.async_get_status.return_value = new_status
+    coordinator.api.async_get_custom_settings.return_value = AsyncMock()
+
+    await coordinator._async_update_data()
+
+    assert coordinator._temperature_cache[APPLIANCE_ID] == 20.0
 
 
 async def test_custom_settings_fetch_failure_is_non_fatal(coordinator, initial_status):
@@ -254,7 +279,9 @@ async def test_switching_to_dry_mode_forces_temp_zero_and_includes_humidity(
 ):
     # new_status (control_response fixture) is Cooling @ 20.0 -- a real, nonzero temp.
     coordinator.async_set_updated_data({APPLIANCE_ID: new_status})
-    coordinator.api.async_set_status.return_value = new_status
+    coordinator.api.async_set_status.return_value = _status_with_mode(
+        new_status, "ComfortableDehumidification"
+    )
 
     await coordinator.async_set_status(
         APPLIANCE_ID, operation_mode="ComfortableDehumidification"
@@ -268,7 +295,9 @@ async def test_switching_to_dry_mode_forces_temp_zero_and_includes_humidity(
 
 async def test_dry_mode_humidity_write_is_cached_and_sent(coordinator, new_status):
     coordinator.async_set_updated_data({APPLIANCE_ID: new_status})
-    coordinator.api.async_set_status.return_value = new_status
+    coordinator.api.async_set_status.return_value = _status_with_mode(
+        new_status, "ComfortableDehumidification"
+    )
 
     await coordinator.async_set_status(
         APPLIANCE_ID, operation_mode="ComfortableDehumidification", humidity=60
@@ -299,7 +328,9 @@ async def test_staying_in_dry_mode_resends_cached_humidity(coordinator, initial_
 async def test_humidity_excluded_when_target_mode_is_not_dry(coordinator, initial_status):
     # initial_status is ComfortableDehumidification -- switching away from it.
     coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
-    coordinator.api.async_set_status.return_value = initial_status
+    coordinator.api.async_set_status.return_value = _status_with_mode(
+        initial_status, "Cooling"
+    )
 
     await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Cooling")
 
@@ -308,8 +339,135 @@ async def test_humidity_excluded_when_target_mode_is_not_dry(coordinator, initia
     assert "humidity" not in payload
 
 
+# --- Silent operation_mode substitution/rejection ---------------------------------------
+# Live-confirmed 2026-09-23: requesting MoistCooling got silently downgraded to plain
+# Cooling -- 200 OK, no error code, but not what was asked. Same "server accepts but
+# doesn't apply" class of bug as the double_mode_temp mismatch check above.
+
+
+async def test_operation_mode_mismatch_raises_clear_error_and_still_caches_truth(
+    coordinator, initial_status, new_status
+):
+    # new_status (control_response fixture) reports Cooling -- simulates the real
+    # MoistCooling -> Cooling downgrade.
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = new_status
+
+    with pytest.raises(HomeAssistantError, match="applied a different mode than asked"):
+        await coordinator.async_set_status(APPLIANCE_ID, operation_mode="MoistCooling")
+
+    # The actual (different) truth must still be cached, same as the double_mode_temp
+    # mismatch case -- so the climate entity reflects reality, not the failed request.
+    assert coordinator.data[APPLIANCE_ID] is new_status
+
+
+async def test_operation_mode_mismatch_not_raised_for_the_known_blast_nanoe_combo(
+    coordinator, initial_status
+):
+    nanoe_status = _status_with_mode(initial_status, "Nanoe")
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = nanoe_status
+
+    # Must not raise -- Blast + nanoex=True legitimately becomes Nanoe on this device.
+    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Blast", nanoex=True)
+
+    assert coordinator.data[APPLIANCE_ID] is nanoe_status
+
+
+async def test_operation_mode_mismatch_not_checked_when_mode_wasnt_explicitly_requested(
+    coordinator, initial_status
+):
+    # An incidental mode substitution as a side effect of some other field change (e.g.
+    # toggling nanoex while already in Blast) must not be flagged -- only an explicit,
+    # caller-requested operation_mode change is checked.
+    nanoe_status = _status_with_mode(initial_status, "Nanoe")
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = nanoe_status
+
+    await coordinator.async_set_status(APPLIANCE_ID, nanoex=True)
+
+    assert coordinator.data[APPLIANCE_ID] is nanoe_status
+
+
 async def test_get_humidity_defaults_to_lowest_confirmed_value(coordinator):
     assert coordinator.get_humidity(APPLIANCE_ID) == 50
+
+
+# --- ClothesDryer also has no user-settable temperature (but, unlike Dry, no humidity
+# target either) -- see const.py's ERROR_CODE_TEMPERATURE_OUT_OF_RANGE comment. ---------
+
+
+async def test_switching_to_clothes_dryer_forces_temp_zero_and_excludes_humidity(
+    coordinator, new_status
+):
+    # new_status (control_response fixture) is Cooling @ 20.0 -- a real, nonzero temp.
+    coordinator.async_set_updated_data({APPLIANCE_ID: new_status})
+    coordinator.api.async_set_status.return_value = _status_with_mode(
+        new_status, "ClothesDryer"
+    )
+
+    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="ClothesDryer")
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["operation_mode"] == "ClothesDryer"
+    assert payload["temperature"] == 0.0
+    assert "humidity" not in payload
+
+
+# --- Switching AWAY from Dry/ClothesDryer must not carry their forced 0.0 into a mode --
+# that requires a real temperature. Live-confirmed 2026-09-23: climate.set_preset_mode
+# Dry->Cooling with no explicit temperature failed with E-21291-01712 for exactly this
+# reason. See const.py's FALLBACK_TEMPERATURE.
+
+
+async def test_switching_off_dry_mode_substitutes_fallback_temperature_when_uncached(
+    coordinator, initial_status
+):
+    # initial_status (status_response fixture) is ComfortableDehumidification @ 0.0, and
+    # nothing else has ever reported a real temperature this session.
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = _status_with_mode(
+        initial_status, "Cooling"
+    )
+
+    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Cooling")
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["operation_mode"] == "Cooling"
+    assert payload["temperature"] == 24.0  # FALLBACK_TEMPERATURE
+
+
+async def test_switching_off_dry_mode_uses_last_observed_real_temperature(
+    coordinator, initial_status, new_status
+):
+    # A prior poll (or write) had already seen a real temperature (new_status is
+    # Cooling @ 20.0) before the device moved into Dry mode.
+    coordinator._remember_temperature(APPLIANCE_ID, new_status)
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = _status_with_mode(
+        initial_status, "Cooling"
+    )
+
+    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Cooling")
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["temperature"] == 20.0
+
+
+async def test_explicit_temperature_is_never_overridden_by_the_fallback(
+    coordinator, initial_status
+):
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = _status_with_mode(
+        initial_status, "Cooling"
+    )
+
+    await coordinator.async_set_status(
+        APPLIANCE_ID, operation_mode="Cooling", temperature=27.0
+    )
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["temperature"] == 27.0
 
 
 # --- operation_token caching (avoids the E-21291-01718 ~2-minute lockout) --------------

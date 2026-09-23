@@ -51,6 +51,7 @@ _HVAC_MODE_BUCKETS: dict[EoliaOperationMode, HVACMode] = {
     EoliaOperationMode.HEATING: HVACMode.HEAT,
     EoliaOperationMode.KEEP_HEATING: HVACMode.HEAT,
     EoliaOperationMode.BLAST: HVACMode.FAN_ONLY,
+    EoliaOperationMode.NANOE: HVACMode.FAN_ONLY,
     EoliaOperationMode.SMELL_CARE: HVACMode.FAN_ONLY,
     EoliaOperationMode.SMELL_CARE_SPOT: HVACMode.FAN_ONLY,
     EoliaOperationMode.NANOEX_CLEANING: HVACMode.FAN_ONLY,
@@ -77,15 +78,34 @@ _DEFAULT_MODE_FOR_HVAC_MODE: dict[HVACMode, EoliaOperationMode] = {
 # (E-21291-01712/E-21291-01711 depending on payload), both via the CLI and the real HA
 # integration; the app's own "dehumidification" menu item maps to
 # ComfortableDehumidification instead. See findings.md's "What the cooling/dehumidify
-# family actually does" section and tests/fixtures/live_captures/19.
+# family actually does" section and tests/fixtures/live_captures/19. KEEP_HEATING is
+# excluded for the same reason -- live-confirmed 2026-09-23 rejected with E-21291-01711
+# (the same generic-error code DEHUMIDIFYING hit) when deliberately selected from the
+# real HA dropdown, with an otherwise-valid payload (real temperature, correct field
+# set) -- not a coordinator payload bug, just not a real selectable mode on this device.
+# NANOE is excluded for a different reason: it's not a mode the API can be asked for at
+# all -- live-confirmed 2026-09-23, the server substitutes it automatically for Blast
+# when nanoex is on, so it's only ever reachable indirectly (see const.py).
 _UNSETTABLE_PRESET_MODES = (
     EoliaOperationMode.STOP,
     EoliaOperationMode.OTHER,
     EoliaOperationMode.DEHUMIDIFYING,
+    EoliaOperationMode.KEEP_HEATING,
+    EoliaOperationMode.NANOE,
 )
 _SETTABLE_PRESET_MODES = [
     mode.value for mode in EoliaOperationMode if mode not in _UNSETTABLE_PRESET_MODES
 ]
+
+# These two modes have no user-settable temperature at all (coordinator.py forces
+# temperature=0.0 into the payload for both regardless of what's asked). Guarded here so
+# a temperature-slider drag while in either mode raises a clear error instead of getting
+# a silent 200 OK that changes nothing -- live-confirmed 2026-09-23 via the real HA
+# integration: dragging the slider in Dry mode produced exactly that silent no-op.
+_NO_TARGET_TEMPERATURE_MODES = (
+    EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION,
+    EoliaOperationMode.CLOTHES_DRYER,
+)
 
 _SWING_HORIZONTAL_MODES = [mode.value for mode in EoliaWindDirectionHorizon]
 _FAN_MODES = [str(level) for level in WIND_VOLUME_LEVELS]
@@ -224,6 +244,18 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
         if temperature is None:
             return
         self._require_powered_on("change the target temperature")
+        status = self._status
+        if status is not None and status.operation_mode in _NO_TARGET_TEMPERATURE_MODES:
+            raise HomeAssistantError(
+                f"{status.operation_mode} doesn't support a target temperature -- "
+                + (
+                    "it targets a humidity level instead (use "
+                    "number.eolia_dry_humidity_target)."
+                    if status.operation_mode
+                    == EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION
+                    else "temperature is fixed/automatic in this mode."
+                )
+            )
         await self.coordinator.async_set_status(
             self._appliance_id, temperature=float(temperature)
         )

@@ -393,17 +393,75 @@ this repo as a design doc if that plan file isn't available in a future session)
   class-level properties for its `cached_property` optimization, so accessing them on the
   class itself returns the descriptor, not the assigned value — a real gotcha worth
   remembering if it comes up again testing other entity attribute bounds).
-- **Next step**: the actual HA config-flow/entity-registration smoke test (§5 of
-  PHASE1_PLAN.md's testing plan) is still the one thing not yet done — everything so far was
-  validated through the CLI tool, direct API calls, and unit tests, not through a real
-  running Home Assistant instance (`coordinator.py`'s new humidity logic specifically has
-  never been exercised live — the CLI tool deliberately doesn't touch coordinator.py, only
-  `auth.py`/`api.py`/`models.py`, so this is unit-tested but not live-tested). Symlink (or
-  copy) `custom_components/eolia` into a real HA config, drive the config flow through the
-  actual UI (same manual copy-paste PKCE method), and confirm every entity matches the
-  real app's state 1:1. Also still open: the temperature step (0.5 vs 1.0°C), and the
-  remaining unconfirmed `hvac_mode` bucket entries for rarely-used modes (SmellCare,
-  NanoexCleaning, AutoTempControl, ClothesDryer, Blast) — none of those tested yet either.
+- **Update, 2026-09-23 — running live on europa via Docker, config flow done, real bugs
+  found and fixed by monitoring live HA<->cloud traffic.** The integration is installed
+  in the real `homeassistant` Docker container on europa (`docker cp` into
+  `/config/custom_components/eolia/`, `docker restart` to reload), config flow completed
+  through the actual UI, and `climate.eolia_yurt` plus the select/sensor/switch/number
+  entities are live against the real unit. Per Kevin's request ("can you monitor the
+  communications between HA and the aircon? There will be impossible combinations we
+  have to guard against"), debug logging was temporarily enabled
+  (`custom_components.eolia.api: debug` in `configuration.yaml`'s `logger:` block --
+  still on, intentionally, for the next session; remove once this feature-audit pass is
+  fully done) and watched live via `docker logs -f` while driving the real app/HA UI.
+  Real bugs found and fixed this way, all covered by new tests, all redeployed and
+  reverified live:
+  - **Silent no-op setting a temperature in Dry/ClothesDryer mode.** Both modes have no
+    user-settable temperature at all (server always wants `0.0`), but the climate
+    entity's temperature slider was still active and `async_set_temperature` just
+    forwarded whatever was asked -- `coordinator.py` was already silently overwriting it
+    back to `0.0`, so the write 200'd but visibly changed nothing, with zero feedback.
+    Fixed in `climate.py`: a `_NO_TARGET_TEMPERATURE_MODES` guard now raises a clear
+    `HomeAssistantError` naming the actual reason (Dry targets humidity instead; use
+    `number.eolia_dry_humidity_target`; ClothesDryer's temperature is just
+    fixed/automatic) before the request ever reaches the coordinator.
+  - **The mirror-image bug**, caught by live-testing the fix above: switching *away*
+    from Dry/ClothesDryer (e.g. `climate.set_preset_mode` to `Cooling`) with no explicit
+    temperature carried Dry's forced `0.0` straight into a mode that requires a real
+    target, failing with `E-21291-01712` -- reproduced live via the real HA UI.
+    `coordinator.py` now tracks the last real (nonzero) temperature seen from any poll or
+    write (`_temperature_cache`) and substitutes it (or `FALLBACK_TEMPERATURE = 24.0` if
+    none observed yet) whenever a mode switch would otherwise carry over an invalid
+    `0.0` -- never overriding an explicit caller-supplied temperature.
+  - **`KeepHeating` confirmed not selectable on this device.** Deliberately picked from
+    the real HA preset dropdown, rejected with `E-21291-01711` -- the same generic-error
+    code plain `Dehumidifying` hits -- despite an otherwise-valid payload (real
+    temperature, correct field set). Excluded from `climate.py`'s settable preset list,
+    same treatment as `Dehumidifying`.
+  - **New operation_mode discovered: `Nanoe`.** Requesting `Blast` (fan-only) with
+    `nanoex: True` gets silently substituted server-side for a previously-unknown wire
+    value, `Nanoe` -- reproduced twice, independent of `ai_control`. Before this was
+    understood it showed up as an "Unknown Eolia operation_mode" warning and displayed
+    as the misleading OFF `hvac_mode` bucket. Now modeled properly in
+    `EoliaOperationMode`/`_HVAC_MODE_BUCKETS` (buckets to `FAN_ONLY`, like `Blast`) but
+    deliberately left out of the settable preset list -- it's only reachable by picking
+    `Blast` and toggling the nanoeX switch, not directly.
+  - **`MoistCooling` confirmed to silently downgrade to plain `Cooling`.** Unlike
+    `KeepHeating`, this doesn't error at all -- `200 OK`, but the returned
+    `operation_mode` doesn't match what was requested, exactly the same "server accepts
+    but doesn't actually apply it" class of bug already guarded against for
+    `double_mode_temp` (see the "double-temperature switch" fix from earlier this
+    session). `async_set_status` now compares the requested `operation_mode` (when the
+    caller explicitly asked to change it) against what actually came back, and raises a
+    clear `HomeAssistantError` on any mismatch -- with one carved-out exception for the
+    known-legitimate `Blast`+`nanoex`->`Nanoe` substitution above, and only checked when
+    `operation_mode` was itself part of the requested change (so an *incidental*
+    substitution as a side effect of some other field, e.g. toggling nanoex while
+    already in `Blast`, is correctly not flagged). Left selectable rather than excluded,
+    since the failure mode here is "clear error, real state still gets cached" rather
+    than "hard rejection" -- same design choice as `KeepMode`'s double-temp mismatch
+    check.
+  - 142 tests now (up from 132 at the start of this pass).
+- **Next step**: resume the live "impossible combinations" audit -- systematically drive
+  every remaining `operation_mode`/field combination through the real HA UI while
+  watching `docker logs -f homeassistant | grep -i eolia` (the debug logger is still on
+  for exactly this). Not yet exercised this way: `SmellCare`/`SmellCareSpot`/
+  `NanoexCleaning`/`Cleaning`/`Auto`/`AutoTempControl`/`KeepMode` combined with
+  nanoex/ai_control/silence_control in various combinations, and the double-temperature
+  (`KeepMode`) and Dry-humidity number entities haven't been exercised live through HA
+  yet either (only unit-tested + confirmed via the CLI previously). Also still open: the
+  temperature step (0.5 vs 1.0°C) and the remaining unconfirmed `hvac_mode` bucket
+  entries for `SmellCare`/`SmellCareSpot`/`NanoexCleaning`/`Cleaning`/`AutoTempControl`.
 
 ## How to leave notes for next time
 

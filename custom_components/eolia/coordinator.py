@@ -25,6 +25,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL_SECONDS,
     DOMAIN,
     DRY_MODE_HUMIDITY_RANGE,
+    FALLBACK_TEMPERATURE,
     EoliaOperationMode,
 )
 from .exceptions import EoliaApiError, EoliaAuthError, EoliaClockSkewError, EoliaNetworkError
@@ -83,11 +84,23 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # return a token on PUT -- not confirmed whether the two resources' tokens are
         # actually interchangeable, but no evidence yet that they aren't either.
         self._operation_token_cache: dict[str, str] = {}
+        # Last real (nonzero) temperature seen for each device, from either a poll or a
+        # write response. ComfortableDehumidification/ClothesDryer always report/force
+        # temperature=0.0 (see async_set_status), so switching away from either mode into
+        # a real-temperature one (e.g. Dry -> Cooling) without this would carry that 0.0
+        # straight into an invalid payload -- live-confirmed 2026-09-23, see const.py's
+        # FALLBACK_TEMPERATURE.
+        self._temperature_cache: dict[str, float] = {}
+
+    def _remember_temperature(self, appliance_id: str, status: EoliaStatus) -> None:
+        if status.temperature:
+            self._temperature_cache[appliance_id] = status.temperature
 
     async def _async_update_data(self) -> dict[str, EoliaStatus]:
         statuses: dict[str, EoliaStatus] = {}
         for appliance_id in self.devices:
             statuses[appliance_id] = await self._async_get_status(appliance_id)
+            self._remember_temperature(appliance_id, statuses[appliance_id])
             await self._async_refresh_custom_settings(appliance_id)
         return statuses
 
@@ -162,15 +175,38 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 self._humidity_cache[appliance_id] = value
             payload[key] = value
 
-        # ComfortableDehumidification ("Dry") targets humidity, not temperature: the
-        # server rejects any nonzero temperature (E-21291-01712) and requires `humidity`
-        # in the payload (E-21291-00007 otherwise) -- the one exception to the general
-        # contract, which deliberately excludes humidity for every other mode. Applied
-        # here (not left to callers) so switching into/out of Dry mode via ANY entity --
-        # climate's preset_mode, the humidity number entity, whatever -- always produces
-        # a valid payload. See findings.md / const.py's DRY_MODE_HUMIDITY_RANGE.
-        if payload["operation_mode"] == EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION:
+        # ComfortableDehumidification ("Dry") and ClothesDryer both have no user-settable
+        # temperature at all -- the server rejects any nonzero value with E-21291-01712
+        # (see const.py's ERROR_CODE_TEMPERATURE_OUT_OF_RANGE). Forced here (not left to
+        # callers) so switching into either mode via ANY entity -- climate's preset_mode,
+        # a stale cached temperature from whatever mode was active before -- always
+        # produces a valid payload, and so a caller can never silently have their
+        # temperature request dropped without knowing why (see climate.py's
+        # _NO_TARGET_TEMPERATURE_MODES guard, which raises before this is ever reached
+        # for a direct temperature-only write).
+        if payload["operation_mode"] in (
+            EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION,
+            EoliaOperationMode.CLOTHES_DRYER,
+        ):
             payload["temperature"] = 0.0
+        elif payload["temperature"] == 0.0 and "temperature" not in changes:
+            # The mirror-image bug, live-confirmed 2026-09-23: switching AWAY from
+            # Dry/ClothesDryer (e.g. via preset_mode) with no explicit temperature given
+            # carries their forced 0.0 straight into a mode that requires a real one,
+            # failing the exact same E-21291-01712 the block above exists to prevent.
+            # Substitute the last real temperature we've observed (or a reasonable
+            # default if we've never seen one) rather than let that happen -- never
+            # overrides an explicit caller-supplied temperature, only a stale carry-over.
+            payload["temperature"] = self._temperature_cache.get(
+                appliance_id, FALLBACK_TEMPERATURE
+            )
+
+        # ComfortableDehumidification additionally targets humidity, not temperature: the
+        # server also requires `humidity` in the payload (E-21291-00007 otherwise) -- the
+        # one exception to the general contract, which deliberately excludes humidity for
+        # every other mode (including ClothesDryer). See findings.md / const.py's
+        # DRY_MODE_HUMIDITY_RANGE.
+        if payload["operation_mode"] == EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION:
             payload["humidity"] = changes.get("humidity", self.get_humidity(appliance_id))
         else:
             payload.pop("humidity", None)
@@ -182,10 +218,37 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
 
         if new_status.operation_token:
             self._operation_token_cache[appliance_id] = new_status.operation_token
+        self._remember_temperature(appliance_id, new_status)
 
         updated = dict(self.data or {})
         updated[appliance_id] = new_status
         self.async_set_updated_data(updated)
+
+        # Live-confirmed 2026-09-23: MoistCooling silently downgrades to plain Cooling
+        # when requested via PUT -- 200 OK, but the returned operation_mode doesn't match
+        # what was asked, with no error code at all. Same "server accepts a request but
+        # doesn't actually apply it" class of bug already guarded against for
+        # double_mode_temp below. The one KNOWN, legitimate exception is Blast with
+        # nanoex=True, which the device deliberately combines into the NANOE wire value
+        # (see const.py's EoliaOperationMode.NANOE) -- that's not a rejection, so it's not
+        # flagged here. Only checked when the caller explicitly asked to change
+        # operation_mode this call, not when a substitution happens incidentally as a
+        # side effect of some other field (e.g. toggling nanoex while already in Blast).
+        requested_mode = payload["operation_mode"]
+        if (
+            "operation_mode" in changes
+            and new_status.operation_mode != requested_mode
+            and not (
+                requested_mode == EoliaOperationMode.BLAST
+                and new_status.operation_mode == EoliaOperationMode.NANOE
+            )
+        ):
+            raise HomeAssistantError(
+                f"Eolia accepted the request but applied a different mode than asked: "
+                f"requested {requested_mode!r}, got back {new_status.operation_mode!r}. "
+                "This usually means the requested mode isn't actually selectable on "
+                "this device via the API, even though it appears in the picker."
+            )
 
     async def async_set_custom_settings(self, appliance_id: str, **changes: Any) -> None:
         """Apply `changes` on top of the last-known .../customsettings and PUT the result.

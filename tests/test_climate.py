@@ -69,6 +69,24 @@ def test_plain_dehumidifying_is_not_a_settable_preset():
     assert EoliaOperationMode.DEHUMIDIFYING in _HVAC_MODE_BUCKETS
 
 
+def test_keep_heating_is_not_a_settable_preset():
+    # Live-confirmed 2026-09-23: rejected with E-21291-01711 (the same generic-error
+    # code DEHUMIDIFYING hit) when deliberately selected from the real HA dropdown, with
+    # an otherwise-valid payload -- not a real selectable mode on this device.
+    assert EoliaOperationMode.KEEP_HEATING.value not in _SETTABLE_PRESET_MODES
+    assert EoliaOperationMode.KEEP_HEATING in _HVAC_MODE_BUCKETS
+
+
+def test_nanoe_is_recognized_but_not_a_settable_preset():
+    # Live-confirmed 2026-09-23: sending operation_mode=Blast with nanoex=True gets
+    # silently substituted server-side for this instead (reproduced twice, independent
+    # of ai_control) -- not directly reachable, so excluded from the settable list, but
+    # must still have a bucket so it reads back as FAN_ONLY rather than the "unknown
+    # mode" warning + OFF-bucket fallback.
+    assert EoliaOperationMode.NANOE.value not in _SETTABLE_PRESET_MODES
+    assert _HVAC_MODE_BUCKETS[EoliaOperationMode.NANOE] == HVACMode.FAN_ONLY
+
+
 def test_every_hvac_mode_except_off_has_a_default_operation_mode():
     handled = set(_DEFAULT_MODE_FOR_HVAC_MODE) | {HVACMode.OFF}
     assert handled == {
@@ -180,5 +198,53 @@ async def test_sub_setting_changes_proceed_when_on(coordinator, method, kwargs):
     entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
 
     await getattr(entity, method)(**kwargs)
+
+    coordinator.api.async_set_status.assert_awaited_once()
+
+
+# --- Guard against setting a temperature in modes that don't have one -------------------
+# Live-confirmed 2026-09-23 via the real HA integration: dragging the climate card's
+# temperature slider while in Dry mode (ComfortableDehumidification) returned a silent
+# 200 OK with the temperature still forced to 0.0 by coordinator.py -- no error, no
+# indication the request did nothing. climate.py now raises a clear error instead of
+# letting that reach the coordinator.
+
+
+def _status_in_mode(mode: EoliaOperationMode) -> EoliaStatus:
+    return EoliaStatus.from_dict(
+        {
+            "appliance_id": APPLIANCE_ID,
+            "operation_status": True,
+            "operation_mode": mode.value,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION, EoliaOperationMode.CLOTHES_DRYER],
+)
+async def test_set_temperature_raises_clear_error_in_no_temperature_modes(
+    coordinator, mode
+):
+    coordinator.async_set_updated_data({APPLIANCE_ID: _status_in_mode(mode)})
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    with pytest.raises(HomeAssistantError, match="doesn't support a target temperature"):
+        await entity.async_set_temperature(**{ATTR_TEMPERATURE: 24.0})
+
+    coordinator.api.async_set_status.assert_not_awaited()
+
+
+async def test_set_temperature_proceeds_in_a_normal_mode(coordinator):
+    coordinator.async_set_updated_data(
+        {APPLIANCE_ID: _status_in_mode(EoliaOperationMode.COOLING)}
+    )
+    coordinator.api.async_set_status.return_value = _status_in_mode(
+        EoliaOperationMode.COOLING
+    )
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_set_temperature(**{ATTR_TEMPERATURE: 24.0})
 
     coordinator.api.async_set_status.assert_awaited_once()
