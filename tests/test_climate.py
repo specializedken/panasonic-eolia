@@ -352,3 +352,10 @@ async def test_turning_off_a_normal_mode_only_sets_operation_status(coordinator)
     coordinator.async_set_status.assert_awaited_once_with(
         APPLIANCE_ID, operation_status=False
     )
+
+
+def test_target_temperature_limits_match_the_units_range(coordinator):
+    # HA's default is 7-35C; the unit and the app use 16-30C (35.0 was rejected live).
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+    assert entity.min_temp == 16.0
+    assert entity.max_temp == 30.0

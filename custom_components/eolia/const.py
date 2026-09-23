@@ -322,6 +322,11 @@ WIND_DIRECTION_SWING = 6
 # 0.5 vs 1.0 steps). Default to whole degrees; validate on first live control test.
 PROVISIONAL_TEMPERATURE_STEP = 1.0
 
+# Live-confirmed for Cooling/CoolDehumidifying/MoistCooling/Heating (the app UI and the
+# server both use 16-30C). HA's climate default is 7-35C, and a 35.0 write was rejected
+# with E-21291-00007 in Auto mode (2026-09-23).
+TARGET_TEMPERATURE_RANGE = (16.0, 30.0)
+
 # Live-confirmed 2026-09-23 via the real HA integration: switching operation_mode away
 # from ComfortableDehumidification/ClothesDryer (both forced to temperature=0.0, see
 # coordinator.py) into a real-temperature mode like Cooling reproduces the exact

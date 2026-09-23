@@ -494,7 +494,11 @@ this repo as a design doc if that plan file isn't available in a future session)
     `wind_direction: 0`, `wind_direction_horizon: "auto"` -- live-confirmed the unit
     stopped. The mode-mismatch check ignores the expected `Stop` when powering off. The
     "can't change X while the AC is off" guard still fires in these modes (untested).
-  - 165 tests now (up from 132 at the start of this pass).
+  - **Temperature range 16-30C now enforced** (`climate` min/max, `const.TARGET_TEMPERATURE_RANGE`):
+    HA's default 7-35C let a `35.0` through, rejected `E-21291-00007` in Auto. `Auto` at
+    25 and 30 confirmed live. **Dry humidity number confirmed live through HA** (`55`
+    sent, echoed back).
+  - 166 tests now (up from 132 at the start of this pass).
 - **Next step**: resume the live "impossible combinations" audit -- systematically drive
   every remaining `operation_mode`/field combination through the real HA UI while
   watching `docker logs -f homeassistant | grep -i eolia` (the debug logger is still on

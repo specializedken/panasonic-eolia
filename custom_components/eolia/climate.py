@@ -29,6 +29,7 @@ from .const import (
     NO_TARGET_TEMPERATURE_MODES,
     OPERATION_MODE_FUNCTION_IDS,
     PROVISIONAL_TEMPERATURE_STEP,
+    TARGET_TEMPERATURE_RANGE,
     WIND_DIRECTION_LEVELS,
     WIND_VOLUME_LEVELS,
     EoliaOperationMode,
@@ -135,6 +136,8 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
     _attr_translation_key = "eolia"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = PROVISIONAL_TEMPERATURE_STEP
+    _attr_min_temp = TARGET_TEMPERATURE_RANGE[0]
+    _attr_max_temp = TARGET_TEMPERATURE_RANGE[1]
     _attr_hvac_modes = [
         HVACMode.OFF,
         HVACMode.AUTO,
