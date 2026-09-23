@@ -86,16 +86,20 @@ class EoliaAiControl(StrEnum):
 
 
 # --- wind_direction_horizon enum (wire values) -------------------------------------------
+# All 8 values live-confirmed against the app 2026-09-23 (see
+# tests/fixtures/live_captures/27-33). Unlike wind_direction's numeric auto (which masks
+# the underlying stored value and always reports 0 while active), this field's "auto"
+# round-trips honestly in /status with no masking behavior observed.
 class EoliaWindDirectionHorizon(StrEnum):
     """Wire values of the `wind_direction_horizon` field."""
 
-    FRONT = "front"
-    SPOT = "spot"
-    WIDE = "wide"
-    TO_LEFT = "to_left"
-    NEARBY_LEFT = "nearby_left"
-    NEARBY_RIGHT = "nearby_right"
-    TO_RIGHT = "to_right"
+    FRONT = "front"  # default/straight-ahead
+    SPOT = "spot"  # focused airflow converging on one point
+    WIDE = "wide"  # spread/diverging airflow, opposite of SPOT
+    TO_LEFT = "to_left"  # fixed, pointing left
+    NEARBY_LEFT = "nearby_left"  # fixed, partial-left (between FRONT and TO_LEFT)
+    NEARBY_RIGHT = "nearby_right"  # fixed, partial-right (mirror of NEARBY_LEFT)
+    TO_RIGHT = "to_right"  # fixed, pointing right
     AUTO = "auto"
 
 

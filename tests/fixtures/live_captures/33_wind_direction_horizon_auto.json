@@ -1,0 +1,42 @@
+{
+  "description": "wind_direction_horizon=auto -- closes out the full 8-value enum. Unlike the vertical axis (wind_direction), which masks the underlying stored value and always reports 0 while its own auto toggle is active, the horizontal axis's auto is echoed back faithfully in /status.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Blast",
+    "operation_status": true,
+    "temperature": 20.0,
+    "timer_value": 0,
+    "wind_direction": 5,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Blast",
+    "ai_control": "off",
+    "temperature": 20.0,
+    "wind_volume": 0,
+    "wind_direction": 5,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 22.0,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows the horizontal louver in auto mode.",
+  "notes": [
+    "CONFIRMED: all 8 wind_direction_horizon values now live-confirmed: front, spot, wide, to_left, to_right, nearby_left, nearby_right, auto.",
+    "Notably different from wind_direction (vertical)'s auto behavior: writing/reading 'auto' here round-trips honestly in /status, no masking of an underlying stored value the way vertical's numeric 0 does. Not yet tested whether horizontal auto has the same 'API can enter but not leave' asymmetry as vertical -- would need a follow-up write to a fixed position while horizontal auto is active to check."
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "description": "wind_direction_horizon=spot, first live test of any non-default horizontal-louver value (previously only known from static/decompiled analysis).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Blast",
+    "operation_status": true,
+    "temperature": 20.0,
+    "timer_value": 0,
+    "wind_direction": 5,
+    "wind_volume": 0,
+    "wind_direction_horizon": "spot",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Blast",
+    "ai_control": "off",
+    "temperature": 20.0,
+    "wind_volume": 0,
+    "wind_direction": 5,
+    "wind_direction_horizon": "spot",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 21.5,
+    "inside_humidity": 80,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows two arrows starting from either side of the unit converging on a point in front of it -- Kevin's read: this visually matches a focused/concentrated airflow, consistent with the 'spot' name. Not a fully certain visual confirmation (hard to tell definitively from the icon alone), but a reasonable match.",
+  "notes": [
+    "First live confirmation of any non-default wind_direction_horizon value -- accepted without error, and the app's icon description is consistent with the wire value's name."
+  ]
+}

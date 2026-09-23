@@ -1,0 +1,29 @@
+{
+  "description": "operation_mode=Blast, set by Kevin via the app -- matches 'Air blower' from the app's mode list. Fan-only mode (already bucketed as HVACMode.FAN_ONLY in climate.py).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": null,
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Blast",
+    "ai_control": "off",
+    "temperature": 20.0,
+    "wind_volume": 3,
+    "wind_direction": 3,
+    "wind_direction_horizon": "front",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 20.5,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "Kevin set this himself via the app.",
+  "notes": [
+    "CONFIRMED: EoliaOperationMode.BLAST wire value matches the app's 'Air blower' mode, supports climate.py's existing HVACMode.FAN_ONLY bucket assignment.",
+    "temperature=20.0 (nonzero, unlike ComfortableDehumidification's forced 0.0) -- likely just a carried-over/inert value from a prior mode rather than something the app actually exposes a control for here, since this is a fan-only mode with no active heating/cooling. Pending Kevin's confirmation on whether the app shows a temperature control for this mode at all.",
+    "wind_volume=3 and wind_direction=3/front are real, non-auto fan/louver settings -- unlike Dry/KeepMode, this mode doesn't force fan/louver back to auto."
+  ]
+}

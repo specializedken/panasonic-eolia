@@ -28,6 +28,8 @@ detail — this README is just an index pointing at the headline finding of each
 | 19 | `ComfortableDehumidification` ("Dry") | **Major finding**: this mode requires `humidity` in the PUT body — the one exception to the general "exclude humidity" rule — and `temperature=0.0` (it targets humidity, not temperature). Three earlier attempts without `humidity` all failed. |
 | 20-24 | Dry mode's humidity range | Bisected live: valid values are exactly **{50, 55, 60}** (5% steps, capped at 60% — not 80%/100% as naively guessed). Same generic error for every rejected value, no distinguishing "out of range" signal. |
 | 25 | `MoistCooling` ("Moist air conditioning") | Set by Kevin via the app. Confirms this mode behaves like the cooling family (real settable target temp, 16-30°C range, fixed louver/horizontal controls) rather than the humidity-target family Dry belongs to. |
+| 26 | `Blast` ("Air blower") | Confirmed as the app's fan-only mode -- no temperature control shown in the app (its `temperature` field is just an inert carried-over value). Normal (non-auto-reset) fan/louver controls, unlike Dry/KeepMode. |
+| 27-33 | `wind_direction_horizon` full enum | All **8 values live-confirmed**: `front` (default), `spot` (converging/focused airflow), `wide` (diverging, opposite of spot), `to_left`/`to_right` (fixed, pointing left/right), `nearby_left`/`nearby_right` (fixed, partial left/right), `auto`. Unlike the vertical axis, horizontal `auto` round-trips honestly in `/status` with no value-masking behavior observed. |
 
 ## Open questions still unresolved
 
@@ -37,7 +39,10 @@ detail — this README is just an index pointing at the headline finding of each
   later — sensor warm-up lag is the leading theory, not confirmed.
 - Whether `temperature=0.0` is required/rejected the same way for other rarely-used
   `operation_mode` values (SmellCare, NanoexCleaning, AutoTempControl, ClothesDryer,
-  Blast, etc.) — none of those tested yet.
+  etc.) — none of those tested yet (`Blast` now confirmed as fan-only, no temp control).
+- Whether horizontal `wind_direction_horizon=auto` has the same "API can enter but not
+  leave" asymmetry the vertical axis has (see 15/18) — not yet tested (would need a
+  fixed-position write while horizontal auto is active).
 - Whether plain `Dehumidifying` (as opposed to `ComfortableDehumidification`) is a real,
   separately-selectable mode on this device at all — the app's "dehumidification" menu
   item turned out to just be `ComfortableDehumidification`; plain `Dehumidifying` was

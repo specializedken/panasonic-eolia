@@ -1,0 +1,42 @@
+{
+  "description": "wind_direction_horizon=wide, confirmed as the opposite of spot (arrows pointing outward from the unit rather than converging on a point).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Blast",
+    "operation_status": true,
+    "temperature": 20.0,
+    "timer_value": 0,
+    "wind_direction": 5,
+    "wind_volume": 0,
+    "wind_direction_horizon": "wide",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Blast",
+    "ai_control": "off",
+    "temperature": 20.0,
+    "wind_volume": 0,
+    "wind_direction": 5,
+    "wind_direction_horizon": "wide",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 21.5,
+    "inside_humidity": 80,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows the same two arrows as 'spot' but pointing outward instead of converging -- clean confirmation this is the wide-spread counterpart to spot.",
+  "notes": [
+    "CONFIRMED: spot=focused/converging airflow, wide=spread/diverging airflow -- clear visual opposite pair.",
+    "This write went through immediately with no 2-minute lockout, unlike most other writes this session -- no app interaction happened in between."
+  ]
+}

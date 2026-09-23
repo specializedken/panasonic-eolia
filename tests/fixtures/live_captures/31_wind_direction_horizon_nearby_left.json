@@ -1,0 +1,41 @@
+{
+  "description": "wind_direction_horizon=nearby_left, confirmed -- a partial-left position between 'front' and 'to_left', matching the name.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Blast",
+    "operation_status": true,
+    "temperature": 20.0,
+    "timer_value": 0,
+    "wind_direction": 5,
+    "wind_volume": 0,
+    "wind_direction_horizon": "nearby_left",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Blast",
+    "ai_control": "off",
+    "temperature": 20.0,
+    "wind_volume": 0,
+    "wind_direction": 5,
+    "wind_direction_horizon": "nearby_left",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 22.0,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "Confirmed (brief).",
+  "notes": [
+    "CONFIRMED: nearby_left is a partial-left position, between front and to_left. Next: nearby_right, then auto to close out the full enum."
+  ]
+}
