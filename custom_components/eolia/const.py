@@ -235,16 +235,16 @@ ERROR_CODE_TEMPERATURE_OUT_OF_RANGE = "E-21291-01712"
 # app-reachable mode on this device -- see OPERATION_MODE_DESCRIPTIONS). Same generic
 # "an application error occurred" message as 00007/01712; not distinguished further.
 ERROR_CODE_UNKNOWN_01711 = "E-21291-01711"
-# "Controlled by another device, cannot change for 2 minutes" -- the literal message.
-# CORRECTED 2026-09-23: originally thought to be caused specifically by the official
-# app writing (even a no-op write on menu close), but later reproduced through the real
-# HA integration ALONE, with Kevin confirming no other app/client was connected at all
-# -- so "another device" is not a reliable read of the actual trigger. Every successful
-# write returns a fresh, never-reused `operation_token` in the response that our
-# requests never echo back; the leading theory is now that this lock is either a fixed
-# hardware/compressor cooldown between ANY two writes regardless of client, or tied to
-# not proving write continuity via that token. Not re-tested/confirmed either way yet.
-# See tests/fixtures/live_captures/02's notes and README.md's open questions.
+# "Controlled by another device, cannot change for 2 minutes" -- the literal message,
+# but RESOLVED 2026-09-23 to not really be about "another device": a controlled A/B
+# test via the CLI confirmed the real mechanism is operation_token continuity. Every
+# successful write returns a fresh operation_token; echoing it back on the very next
+# write (even seconds later) avoids this lockout entirely, while an otherwise-identical
+# write without it reliably triggers it. coordinator.py now caches and echoes this
+# automatically (_operation_token_cache). See
+# tests/fixtures/live_captures/38_operation_token_confirmed_fix.json for the full A/B
+# test, and 02/04/37 for how the "another device" theory was arrived at and then
+# superseded.
 ERROR_CODE_DEVICE_LOCKED = "E-21291-01718"
 # double_mode_temp.high/low must be at least 5 degrees apart.
 ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW = "E-21291-02009"

@@ -310,3 +310,71 @@ async def test_humidity_excluded_when_target_mode_is_not_dry(coordinator, initia
 
 async def test_get_humidity_defaults_to_lowest_confirmed_value(coordinator):
     assert coordinator.get_humidity(APPLIANCE_ID) == 50
+
+
+# --- operation_token caching (avoids the E-21291-01718 ~2-minute lockout) --------------
+# Live-confirmed 2026-09-23 via a controlled CLI A/B test: echoing back the previous
+# response's operation_token on the next write avoids the lockout entirely, even for
+# writes seconds apart. See tests/fixtures/live_captures/37's notes and coordinator.py's
+# _operation_token_cache docstring.
+
+async def test_first_write_has_no_operation_token(coordinator, initial_status, new_status):
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = new_status
+
+    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Cooling")
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert "operation_token" not in payload
+
+
+async def test_second_write_echoes_back_the_first_responses_token(
+    coordinator, initial_status, new_status
+):
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = new_status
+    assert new_status.operation_token  # sanity: the fixture really has one
+
+    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Cooling")
+    await coordinator.async_set_status(APPLIANCE_ID, wind_volume=3)
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["operation_token"] == new_status.operation_token
+
+
+async def test_custom_settings_write_also_caches_and_echoes_the_token(
+    coordinator, initial_custom_settings
+):
+    coordinator.custom_settings[APPLIANCE_ID] = initial_custom_settings
+    tokened_settings = EoliaCustomSettings.from_dict(
+        {
+            "double_mode_temp": {"status": True, "high": 28, "low": 23},
+            "peak_cut": 100,
+            "operation_token": "TESTTOKEN123",
+        }
+    )
+    coordinator.api.async_set_custom_settings.return_value = tokened_settings
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=True)
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_high=28)
+
+    _, payload = coordinator.api.async_set_custom_settings.call_args.args
+    assert payload["operation_token"] == "TESTTOKEN123"
+
+
+async def test_status_and_custom_settings_share_one_token_cache(
+    coordinator, initial_status, new_status, initial_custom_settings
+):
+    # Not confirmed whether the two resources' tokens are actually interchangeable, but
+    # the coordinator currently shares one cache between them -- this test just locks in
+    # that documented (if unconfirmed) behavior.
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = new_status
+    coordinator.custom_settings[APPLIANCE_ID] = initial_custom_settings
+    coordinator.api.async_set_custom_settings.return_value = initial_custom_settings
+
+    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Cooling")
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=True)
+
+    _, custom_payload = coordinator.api.async_set_custom_settings.call_args.args
+    assert custom_payload["operation_token"] == new_status.operation_token

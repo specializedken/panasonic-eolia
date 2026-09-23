@@ -71,6 +71,18 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # for this resource isn't confirmed across devices; the main status poll already
         # covers auth/clock-skew failures.
         self.custom_settings: dict[str, EoliaCustomSettings] = {}
+        # Live-confirmed 2026-09-23: echoing back the operation_token from the previous
+        # PUT response as the next write's `operation_token` avoids the ~2-minute
+        # E-21291-01718 "controlled by another device" lockout, even for writes seconds
+        # apart -- confirmed with a controlled A/B test via the CLI (2 consecutive
+        # writes ~15-20s apart succeeded with the token included; an otherwise-identical
+        # write without it failed the same way every previous occurrence did). No
+        # readback exists on GET (only PUT responses include it), so this needs its own
+        # cache, same pattern as silence_control. Shared across /status and
+        # /customsettings since both are scoped to the same physical appliance and both
+        # return a token on PUT -- not confirmed whether the two resources' tokens are
+        # actually interchangeable, but no evidence yet that they aren't either.
+        self._operation_token_cache: dict[str, str] = {}
 
     async def _async_update_data(self) -> dict[str, EoliaStatus]:
         statuses: dict[str, EoliaStatus] = {}
@@ -139,6 +151,9 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
 
         payload = current.to_control_fields()
         payload["silence_control"] = self.get_silence_control(appliance_id)
+        token = self._operation_token_cache.get(appliance_id)
+        if token is not None:
+            payload["operation_token"] = token
 
         for key, value in changes.items():
             if key == "silence_control":
@@ -165,6 +180,9 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         except (EoliaApiError, EoliaAuthError) as err:
             raise HomeAssistantError(f"Failed to update Eolia device: {err}") from err
 
+        if new_status.operation_token:
+            self._operation_token_cache[appliance_id] = new_status.operation_token
+
         updated = dict(self.data or {})
         updated[appliance_id] = new_status
         self.async_set_updated_data(updated)
@@ -182,6 +200,9 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
             current = await self.api.async_get_custom_settings(appliance_id)
 
         payload = current.to_control_fields()
+        token = self._operation_token_cache.get(appliance_id)
+        if token is not None:
+            payload["operation_token"] = token
         double_mode_temp = dict(payload["double_mode_temp"])
         if "double_mode_temp_status" in changes:
             double_mode_temp["status"] = changes.pop("double_mode_temp_status")
@@ -198,6 +219,9 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
             raise HomeAssistantError(
                 f"Failed to update Eolia device's double-temperature settings: {err}"
             ) from err
+
+        if new_settings.operation_token:
+            self._operation_token_cache[appliance_id] = new_settings.operation_token
 
         self.custom_settings[appliance_id] = new_settings
         self.async_update_listeners()

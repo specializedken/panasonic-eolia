@@ -39,17 +39,17 @@ class EoliaClockSkewError(EoliaApiError):
 
 
 class EoliaDeviceLockedError(EoliaApiError):
-    """Raised for E-21291-01718 -- a ~2 minute write lockout, cause not fully confirmed.
+    """Raised for E-21291-01718 -- a ~2 minute write lockout.
 
     The literal message is "controlled by another device, cannot change for 2 minutes",
-    and it was first observed right after the official app wrote to the device. But it
-    was later reproduced through the real HA integration alone, with no other
-    app/client connected at all -- so "another device" doesn't reliably describe the
-    actual trigger. Every successful write returns a fresh `operation_token` this
-    integration never echoes back; the leading (unconfirmed) theory is a fixed
-    hardware/compressor cooldown between any two writes, or something tied to that
-    token. Not something the integration can fix itself either way, but distinct from a
-    real failure -- a retry after waiting should succeed.
+    but RESOLVED 2026-09-23: not really about a second client at all. A controlled A/B
+    test confirmed the real mechanism is operation_token continuity -- every successful
+    write returns a fresh operation_token, and echoing it back on the very next write
+    avoids this lockout even seconds later, while omitting it reliably triggers it.
+    coordinator.py now caches and echoes this automatically, so this exception should be
+    rare going forward; if it still fires, it likely means the cached token was lost
+    (e.g. HA restarted) or a genuinely different client (the official app, physical
+    remote) wrote in between. See tests/fixtures/live_captures/38 for the A/B test.
     """
 
 

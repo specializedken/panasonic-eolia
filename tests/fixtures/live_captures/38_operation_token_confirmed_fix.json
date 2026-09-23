@@ -1,0 +1,36 @@
+{
+  "description": "RESOLVED: controlled A/B test confirming operation_token is the real mechanism behind the E-21291-01718 ~2-minute lockout. Echoing back the previous PUT response's operation_token on the next write avoids the lockout entirely, even seconds apart.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "sequence": [
+    {
+      "step": "A) baseline write, no token (establishes a fresh token)",
+      "request": {"operation_mode": "Cooling", "operation_status": true, "temperature": 24.0, "wind_volume": 0, "...": "rest of fixed fields, ai_control off etc"},
+      "result": "SUCCESS",
+      "response_operation_token": "r35Y13330aoIlCv9"
+    },
+    {
+      "step": "B) ~20s later, WITH operation_token from A",
+      "request": {"wind_volume": 3, "operation_token": "r35Y13330aoIlCv9", "...": "rest of fixed fields unchanged"},
+      "result": "SUCCESS (no lockout)",
+      "response_operation_token": "8rncshRULFUdw2vf"
+    },
+    {
+      "step": "C) ~15s later, WITH operation_token from B",
+      "request": {"wind_volume": 4, "operation_token": "8rncshRULFUdw2vf", "...": "rest of fixed fields unchanged"},
+      "result": "SUCCESS (no lockout)",
+      "response_operation_token": "eJogVXo7kQ0Sm9nv"
+    },
+    {
+      "step": "D) negative control, ~15s later, WITHOUT any operation_token",
+      "request": {"wind_volume": 2, "...": "rest of fixed fields unchanged, no operation_token key at all"},
+      "result": "FAILED",
+      "error": {"code": "E-21291-01718", "message": "他の機器でエアコンが制御されました。2分間変更できません。"}
+    }
+  ],
+  "notes": [
+    "Clean 2-for-2 / 1-for-1 A/B result: WITH the previous response's token echoed back, both close-interval writes (B, C) succeeded at ~15-20s gaps that have repeatedly failed before. WITHOUT it (D), the very next write at the same ~15s interval failed identically to every prior occurrence.",
+    "This resolves the open question from captures 02/04/37: the lockout is NOT really about 'another device' (though a genuine second client, like the AVD app active during the earlier CLI session, could ALSO independently hold/invalidate the token) -- it's about write continuity via operation_token. Any write that doesn't echo the immediately-prior response's token looks like a competing/uncoordinated write and gets locked out, regardless of whether it's really from a different client or the same one just not tracking the token.",
+    "Implemented in coordinator.py: a new _operation_token_cache (dict[appliance_id, str], same pattern as silence_control/humidity caches, since operation_token has no GET readback -- confirmed across dozens of GET captures this session, only ever present on PUT responses) is now populated from every successful /status or /customsettings PUT response and echoed back as the operation_token field on the NEXT write to either endpoint. Shared between both endpoints since both are scoped to the same physical appliance; not separately confirmed whether their tokens are truly interchangeable, but no evidence yet that they aren't.",
+    "This was tested purely via the CLI against real hardware -- not yet re-verified through the actual HA integration with the new coordinator.py caching in place. Next step: redeploy and watch HA's debug logs for a rapid sequence of entity changes (e.g. adjusting fan speed then swing quickly) to confirm no more E-21291-01718 hits in normal usage."
+  ]
+}

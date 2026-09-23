@@ -250,27 +250,27 @@ this repo as a design doc if that plan file isn't available in a future session)
     debugging — pinned `pycares==4.11.0` to match; `requirements-test.txt` doesn't pin
     `pycares` directly since `aiodns==3.2.0`'s own dependency resolution handles it
     correctly from a clean install, this was only an issue because of manual reinstalls.
-  - **New confirmed device behavior — a ~2 minute write lockout, cause not fully settled**:
-    error code `E-21291-01718` ("他の機器でエアコンが制御されました。2分間変更できません" —
-    "controlled by another device, cannot change for 2 minutes"). Originally attributed
-    to the official app firing a real write just from opening/closing a settings menu
-    (Kevin confirmed a "writing settings" modal appeared with zero value change), which
-    seemed to lock out other clients for ~2 minutes. **CORRECTED 2026-09-23, during Phase
-    2 HA integration testing**: the identical lockout was reproduced through the real HA
-    integration's own writes alone, ~18 seconds apart, with Kevin explicitly confirming
-    zero other clients connected at that time — so a second client isn't strictly
-    required. (A real second client — a separate Eolia app running on an AVD — genuinely
-    was active during the original CLI-session occurrence, confirmed after the fact, so
-    that theory wasn't wrong so much as incomplete.) Current leading theory: a
-    write-timing cooldown (possibly hardware/compressor protection, or tied to the
-    `operation_token` every successful response returns but this integration's requests
-    never echo back) that any two writes close together in time can trigger, regardless
-    of whether they're really from different clients. Untested: whether echoing the last
-    `operation_token` back avoids it. Mapped to a dedicated `EoliaDeviceLockedError` in
-    `exceptions.py`/`api.py` either way — see `tests/fixtures/live_captures/02` and `37`
-    for the full investigation. **Real implication**: any HA write can transiently fail
-    with this, not necessarily tied to external app/remote use — a "try again shortly"
-    UX treatment remains the right mitigation, not a bug to chase further right now.
+  - **RESOLVED — the ~2 minute write lockout (`E-21291-01718`) is `operation_token`
+    continuity, not "another device".** Long investigation arc: first attributed to the
+    official app writing on menu close (confirmed real — Kevin saw a "writing settings"
+    modal with zero value change); then reproduced through the real HA integration's own
+    writes ALONE (~18s apart, zero other clients — Kevin confirmed directly), which broke
+    that theory; Kevin then revealed a real second client (a separate Eolia app on an
+    AVD) genuinely *was* active during the original CLI-session occurrence, so that
+    theory wasn't wrong, just incomplete. **Finally settled with a controlled A/B test
+    via the CLI**: two consecutive writes ~15-20s apart **succeeded** when the second
+    echoed back the operation_token from the first's response; an otherwise-identical
+    write **failed** the usual way without it. So the real mechanism is write
+    continuity via this token (which every successful `/status` or `/customsettings` PUT
+    response includes, but which this integration's requests never sent back) — "another
+    device" was just generic/misleading error text, and a real second client (no token
+    tracking of its own) would trip the same mechanism, explaining why that theory kept
+    testing true without being the actual cause. **Fixed in `coordinator.py`**: a new
+    `_operation_token_cache` (same no-GET-readback pattern as `silence_control`/
+    `humidity`) now auto-caches and echoes this token on every write to either endpoint.
+    Full A/B test data in `tests/fixtures/live_captures/38`; see `02`/`04`/`37` for how
+    the theory evolved. **Only tested via the CLI so far — not yet re-verified through
+    the real HA integration with the fix deployed** (next step, see below).
   - **`operation_mode=KeepMode` (the app's "double temperature setting") fully resolved
     end-to-end.** The low/high range is **not** in `/status` at all (confirmed live before
     a separate Claude session, working from the decompiled APK on a different machine,

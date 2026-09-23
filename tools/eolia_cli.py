@@ -187,6 +187,7 @@ def _status_dict(status: EoliaStatus) -> dict[str, Any]:
         "outside_temp": status.outside_temp,
         "aq_name": status.aq_name,
         "aq_value": status.aq_value,
+        "operation_token": status.operation_token,
     }
 
 
@@ -240,6 +241,12 @@ async def cmd_set(args: argparse.Namespace) -> None:
             # section). Injected here only for testing whether some specific mode (e.g.
             # ComfortableDehumidification/Dry) is the exception and actually requires it.
             payload["humidity"] = args.humidity
+        if args.operation_token is not None:
+            # EXPERIMENTAL: not part of the normal contract (never included in any
+            # working request so far) -- only for testing whether echoing back a prior
+            # response's operation_token avoids the E-21291-01718 ~2-minute lockout.
+            # See tests/fixtures/live_captures/37's notes.
+            payload["operation_token"] = args.operation_token
 
         print("About to send this control write to the real device:")
         print(json.dumps(payload, indent=2))
@@ -372,6 +379,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "EXPERIMENTAL: not part of the normal control-field contract (see "
             "findings.md) -- only for testing whether a specific mode requires it"
+        ),
+    )
+    p_set.add_argument(
+        "--operation-token",
+        dest="operation_token",
+        help=(
+            "EXPERIMENTAL: not part of the normal control-field contract -- only for "
+            "testing whether echoing back a prior response's operation_token avoids "
+            "the E-21291-01718 ~2-minute lockout"
         ),
     )
     p_set.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompt")
