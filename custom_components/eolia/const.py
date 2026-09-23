@@ -216,9 +216,19 @@ class EoliaWindShieldHit(StrEnum):
 # guessed at.
 ERROR_CODE_CLOCK_SKEW = "E-21291-00002"
 ERROR_CODE_GENERIC_APPLICATION_ERROR = "E-21291-00007"
+# Generic "system error" -- seen from several untested /poc/.../eco/* and
+# /powermonitor/settings endpoints; not conclusively "unsupported", could just need query
+# params that weren't guessed. See findings.md's "Power/eco history" section.
+ERROR_CODE_SYSTEM_ERROR = "E-21291-00000"
 # Temperature out of valid range for the target operation_mode (observed with
-# temperature=0.0 carried over from a Stop-mode status into an active-mode write).
+# temperature=0.0 carried over from a Stop-mode status into an active-mode write, and
+# also with a real nonzero temperature sent while switching into a mode -- like
+# ComfortableDehumidification/ClothesDryer -- that requires 0.0 instead).
 ERROR_CODE_TEMPERATURE_OUT_OF_RANGE = "E-21291-01712"
+# Seen once, switching directly to plain Dehumidifying (never confirmed as a real
+# app-reachable mode on this device -- see OPERATION_MODE_DESCRIPTIONS). Same generic
+# "an application error occurred" message as 00007/01712; not distinguished further.
+ERROR_CODE_UNKNOWN_01711 = "E-21291-01711"
 # Another client wrote to the device within the last ~2 minutes -- confirmed live to be
 # triggered by the official app (even a no-op write on menu close, not just an actual
 # value change). See tests/fixtures/live_captures/02's notes.

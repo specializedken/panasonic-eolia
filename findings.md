@@ -287,6 +287,56 @@ Beach-prefixed endpoints (`/beach/...`) are dashboard "card" widgets — coming-
 going-out scene, sleep scene, eco monitor, air-quality monitor, human-detection monitor, etc.
 Not control endpoints, informational only.
 
+## Power/eco history — `/poc/devices/{id}/eco/history` (confirmed live 2026-09-23)
+
+Prompted by "is there power consumption info for these modes" — tried every power/eco-related
+path from the listing above live. Only one returned real data:
+
+- **`GET /poc/devices/{applianceId}/eco/history` → 200**, real data. Shape:
+  ```json
+  {
+    "history": [
+      {
+        "start_time": "2026-09-22T00:40:00",
+        "stop_time": "2026-09-22T01:10:00",
+        "bill": 2,
+        "drive_mode_string": "冷房除湿",
+        "setting_temp_min": 23.0,
+        "setting_temp_max": 28.0,
+        "outside_temp_min": 20.0,
+        "outside_temp_max": 21.0,
+        "bill_list": [0, 1, 1, 2],
+        "timeoffset": [0, 10, 20, 30],
+        "setting_temp_list": [23.0, 23.0, 24.0, 24.0],
+        "outside_temp_list": [20, 20, 21, 21]
+      }
+    ]
+  }
+  ```
+  One entry per continuous "drive session" (power on to off/mode-change), most-recent first;
+  had 6 entries covering the past several days on the live account. `drive_mode_string` is the
+  **Japanese UI label** (see the `operation_mode` table above for the mapping), not the wire
+  value. `bill` is an **estimated cost in yen** — no raw watts/kWh field anywhere in the
+  response; this is Panasonic's app-side cost estimate, not a true power-meter reading.
+  `setting_temp_min`/`max`/`list` use `-1.0` as a sentinel for "no target temperature was set
+  during this session" (matches live findings above: `ComfortableDehumidification`/plain
+  `除湿`-labeled sessions all showed `-1.0`; the one `冷房除湿`/`CoolDehumidifying` session
+  showed a real range). `bill_list`/`timeoffset`/`outside_temp_list` are parallel time-series
+  arrays, roughly 10-minute intervals.
+- **Everything else tried failed** with a new generic error code, **`E-21291-00000`**
+  ("システムエラーが発生しました" -- system error): `GET /devices/{id}/powermonitor/settings`,
+  `GET /eco/current`, `GET /eco/history`, `GET /eco/prediction`, `GET
+  /poc/devices/{id}/eco/latest`, `GET /poc/devices/{id}/eco/predictions`, `GET
+  /poc/devices/{id}/contribution/econavi`. Not conclusively "unsupported" -- could just need
+  query params (a date range, most likely) that weren't guessed. Not investigated further this
+  session (Kevin asked to document what was found and stop there for now).
+- Caveat: this lives under the `/poc/...` prefix (plausibly "proof of concept"), unlike
+  `/status`'s stable `/eolia/v6/devices/...` path -- treat as more likely to change or be
+  removed without notice than the core control API.
+- Not wired into `custom_components/eolia/` -- documented only, per Kevin's explicit request.
+  Would map naturally to a diagnostic sensor (e.g. estimated recent running cost) if ever
+  revisited.
+
 ## Target device
 
 Panasonic CS-712DX2-W (Eolia X series, JP), nicknamed "Yurt" in the app.
