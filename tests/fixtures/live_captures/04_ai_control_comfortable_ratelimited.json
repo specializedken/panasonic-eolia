@@ -1,0 +1,29 @@
+{
+  "description": "Attempted ai_control=comfortable right after Kevin re-confirmed nanoex=false in the app. Rejected with the same lockout code as 02 -- consistent with the now-confirmed theory that the app fires a write just from being opened/closed, even with no value change.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 3,
+    "wind_volume": 0,
+    "wind_direction_horizon": "front",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": null,
+  "error": {
+    "code": "E-21291-01718",
+    "message": "他の機器でエアコンが制御されました。2分間変更できません。"
+  },
+  "app_confirmed": null,
+  "notes": [
+    "Second occurrence of the same cross-client lockout, right after Kevin checked the app to confirm nanoex=false -- strong second data point for the confirmed theory in 02's notes.",
+    "Practical workflow note for the rest of this session: checking the app to confirm a change appears to re-arm the 2-minute lockout, which then blocks the NEXT CLI write. Confirming in the app right after each CLI write (rather than before the next one) doesn't cost anything extra, but confirming and then immediately trying another CLI write does. Waiting out the lockout each time works fine, just costs ~2 minutes per cycle."
+  ]
+}

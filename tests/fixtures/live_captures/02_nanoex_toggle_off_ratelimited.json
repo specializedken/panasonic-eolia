@@ -1,0 +1,32 @@
+{
+  "description": "Attempted to toggle nanoex off (from true, confirmed matching the app) while Kevin had the official app open checking current Cooling/NanoeX state (view only, confirmed no changes made in-app). Rejected -- new error code, apparent 2-minute lockout of unclear origin (see corrected notes).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 3,
+    "wind_volume": 0,
+    "wind_direction_horizon": "front",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": null,
+  "error": {
+    "code": "E-21291-01718",
+    "message": "他の機器でエアコンが制御されました。2分間変更できません。",
+    "message_en_approx": "The air conditioner was controlled by another device. Cannot be changed for 2 minutes."
+  },
+  "app_confirmed": null,
+  "notes": [
+    "Third distinct E-21291-* code seen this session (after 00002 clock-skew, and 00007/01712 generic-application-error family). This one has a specific, actionable message rather than a generic apology.",
+    "RE-CONFIRMED theory, now with solid evidence: it IS a cross-client write conflict. Kevin reports the official app fires a real PUT ('writing settings' modal) just from opening and closing the NanoeX menu, even with zero value change -- so even though he never changed anything, the app itself still wrote. That write (from the app, a different client) is almost certainly what put the appliance into the 2-minute lockout that then rejected our CLI's write. The earlier 'self-cooldown from our own prior write' correction was wrong -- reverting to the original cross-client-lockout theory, now confirmed rather than guessed.",
+    "Real implication for the HA integration: this is a genuine risk whenever the official app (or presumably the physical remote) is used around the same time as HA -- even just opening a menu in the app without changing anything can lock HA out of writing for ~2 minutes. Should map this code to a distinct exception (e.g. EoliaDeviceLockedError) with a 'try again shortly, another client just changed this device' message rather than a generic HomeAssistantError. A coordinator-side minimum-interval-between-writes safeguard would NOT fully prevent this, since the trigger is external (the app), not our own write cadence.",
+    "Did NOT retry immediately -- waiting out the ~2 minute window before re-attempting the nanoex toggle, to avoid hammering the endpoint during an active lockout."
+  ]
+}

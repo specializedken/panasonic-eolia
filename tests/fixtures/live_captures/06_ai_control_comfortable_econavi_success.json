@@ -1,0 +1,43 @@
+{
+  "description": "ai_control=comfortable_econavi -- the third of the app's 3-way selector (off / AI / AI+ECONAVI).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable_econavi",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 3,
+    "wind_volume": 0,
+    "wind_direction_horizon": "front",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "comfortable_econavi",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 3,
+    "wind_direction_horizon": "front",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 21.0,
+    "inside_humidity": 75,
+    "outside_temp": 21.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": null,
+  "notes": [
+    "Confirms the EoliaAiControl.COMFORTABLE_ECONAVI wire value ('comfortable_econavi') round-trips correctly.",
+    "All 3 ai_control values now exercised live and matched wire values in const.py exactly: off (already known from earlier status reads), comfortable (05), comfortable_econavi (this one).",
+    "Next: set ai_control back to off to complete the cycle, pending app confirmation on econavi first."
+  ]
+}

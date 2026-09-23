@@ -1,0 +1,43 @@
+{
+  "description": "Retried toggling nanoex off after waiting out the ~2 minute lockout from 02 (triggered by the official app writing on menu close, per Kevin). Succeeded this time.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 3,
+    "wind_volume": 0,
+    "wind_direction_horizon": "front",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "off",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 3,
+    "wind_direction_horizon": "front",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 21.0,
+    "inside_humidity": 75,
+    "outside_temp": 21.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": null,
+  "notes": [
+    "Confirms the request contract works for toggling nanoex specifically (isolated field change via the coordinator-style read-modify-write).",
+    "outside_temp now holding steady at a plausible 21.0 (matches inside/outside being close, consistent -- AC has been running a few minutes). Real reading, not the 999.0 sentinel seen right at power-on.",
+    "inside_temp/inside_humidity both dropped slightly (21.5->21.0, 80->75) since 01_power_on_cooling.json, consistent with Cooling actually running and having an effect -- good corroborating signal the mode change was physically real, not just an API-level no-op."
+  ]
+}

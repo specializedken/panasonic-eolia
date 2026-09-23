@@ -1,0 +1,43 @@
+{
+  "description": "Power on from Stop, set operation_mode=Cooling, temperature=24.0. First attempt with the carried-over temperature=0.0 (from Stop's cached status) was rejected by the server -- see notes.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "off",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": true,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 3,
+    "wind_volume": 0,
+    "wind_direction_horizon": "front",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "off",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 3,
+    "wind_direction_horizon": "front",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": true,
+    "airquality": false,
+    "inside_temp": 21.5,
+    "inside_humidity": 80,
+    "outside_temp": 999.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": null,
+  "notes": [
+    "Rejected attempt (not saved as a separate fixture): same payload but temperature=0.0 (carried over unmodified from the prior Stop-mode status) -> HTTP error, code E-21291-01712, message 'アプリケーションエラーが発生しました。ご迷惑をおかけし申し訳ございません。' (generic 'an application error occurred'). Strongly suggests the server validates temperature against the target operation_mode when operation_status=true, and 0.0 is out of range for Cooling. New error code, not previously documented (only 00002/00007 known before this).",
+    "wind_volume=0 was accepted without error -- supports the provisional 'wind_volume 0 = auto' guess in const.py.",
+    "outside_temp is still 999.0 even though the unit is now on -- contradicts the theory that 999.0 only appears while off; possibly a stale/slow-updating outdoor sensor reading, or this installation's outdoor sensor doesn't report at all. Needs more observation."
+  ]
+}

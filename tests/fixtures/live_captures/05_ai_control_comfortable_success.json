@@ -1,0 +1,42 @@
+{
+  "description": "ai_control=comfortable (plain AI mode, no ECONAVI) -- first of the two 'AI' options in the app's 3-way selector (off / AI / AI+ECONAVI).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 3,
+    "wind_volume": 0,
+    "wind_direction_horizon": "front",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "comfortable",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 3,
+    "wind_direction_horizon": "front",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 21.0,
+    "inside_humidity": 75,
+    "outside_temp": 21.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": null,
+  "notes": [
+    "Confirms the EoliaAiControl.COMFORTABLE wire value ('comfortable') round-trips correctly.",
+    "Next: comfortable_econavi, then back to off, each pending app confirmation."
+  ]
+}
