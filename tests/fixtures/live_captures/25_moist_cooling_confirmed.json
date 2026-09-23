@@ -1,0 +1,29 @@
+{
+  "description": "operation_mode=MoistCooling, set by Kevin directly via the app (not our CLI) -- matches 'Moist air conditioning (cooling)' from the app's mode list he shared earlier. Confirms this mode behaves like Cooling/CoolDehumidifying (real settable target temperature) rather than ComfortableDehumidification (humidity target, temperature forced to 0.0).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": null,
+  "response": {
+    "operation_status": true,
+    "operation_mode": "MoistCooling",
+    "ai_control": "off",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 3,
+    "wind_direction_horizon": "front",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 20.5,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "Kevin set this himself via the app; confirmed a real target-temperature control (range 16-30C in the app) and manual louver/wind_direction_horizon controls -- both consistent with this being a 'cooling-family' mode, not a 'humidity-target' mode like Dry.",
+  "notes": [
+    "CONFIRMED: EoliaOperationMode.MOIST_COOLING behaves like Cooling/CoolDehumidifying: real temperature target (not forced to 0.0 like ComfortableDehumidification), and normal wind_direction/wind_direction_horizon fixed-position controls (not reset to auto the way KeepMode resets them). Supports climate.py's existing HVACMode.COOL bucket assignment for this mode.",
+    "App's stated temperature range for this mode is 16-30C -- consistent with what a normal AC temperature range should be, though not yet tested at either boundary live.",
+    "ai_control=off here, drifted/reset from whatever it was before (not tested whether this mode forces ai_control off, or whether Kevin set it manually while switching modes in the app)."
+  ]
+}

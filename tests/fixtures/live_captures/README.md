@@ -27,6 +27,7 @@ detail — this README is just an index pointing at the headline finding of each
 | 18 | `wind_direction=0` via API | Confirmed the API **can** freely enter auto (resolves the asymmetry from 15: entering auto always works, but a fixed-position write while already in auto is silently ignored — no API way to *leave* auto, only the app's own toggle does that). |
 | 19 | `ComfortableDehumidification` ("Dry") | **Major finding**: this mode requires `humidity` in the PUT body — the one exception to the general "exclude humidity" rule — and `temperature=0.0` (it targets humidity, not temperature). Three earlier attempts without `humidity` all failed. |
 | 20-24 | Dry mode's humidity range | Bisected live: valid values are exactly **{50, 55, 60}** (5% steps, capped at 60% — not 80%/100% as naively guessed). Same generic error for every rejected value, no distinguishing "out of range" signal. |
+| 25 | `MoistCooling` ("Moist air conditioning") | Set by Kevin via the app. Confirms this mode behaves like the cooling family (real settable target temp, 16-30°C range, fixed louver/horizontal controls) rather than the humidity-target family Dry belongs to. |
 
 ## Open questions still unresolved
 
