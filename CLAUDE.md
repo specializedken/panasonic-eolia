@@ -352,28 +352,49 @@ this repo as a design doc if that plan file isn't available in a future session)
     humidity-target conventions). Same generic `E-21291-00007` for every rejected value,
     no distinguishing signal. New constants `DRY_MODE_HUMIDITY_RANGE`/
     `DRY_MODE_HUMIDITY_STEP` added to `const.py`, plus a corrected comment on
-    `CONTROL_REQUEST_FIELDS` documenting the exception. **Not yet wired into
-    `coordinator.py`/`climate.py`** — same as `silence_control`, `humidity` has zero GET
-    readback (confirmed by checking the response body), so exposing it as a real HA
-    feature (`ClimateEntityFeature.TARGET_HUMIDITY` is the natural fit) would need its own
-    local cache the same way `silence_control` already works. Ask Kevin before building
-    this — it's a real design decision (mode-conditional entity behavior), same as the
-    double-temp integration was.
+    `CONTROL_REQUEST_FIELDS` documenting the exception.
   - Also ruled out along the way: plain `Dehumidifying` (as opposed to
     `ComfortableDehumidification`) was never confirmed as an actual app-reachable option on
     this device — the app's "dehumidification" menu item turned out to just be
     `ComfortableDehumidification`. Whether plain `Dehumidifying` is real on any device is
     still an open question.
+- **Update, 2026-09-23 continued further — Dry mode's humidity target wired into a real
+  entity, by explicit request ("Yeah it needs to be in HA").** `coordinator.py`'s
+  `async_set_status()` now forces `temperature=0.0` and includes `humidity` (from a new
+  local cache, `get_humidity()`/`_humidity_cache` — same no-GET-readback pattern as
+  `silence_control`) whenever the *resulting* `operation_mode` is
+  `ComfortableDehumidification`, and excludes `humidity` entirely otherwise — this is
+  centralized in the coordinator so it works correctly no matter which entity triggers
+  the mode switch, matching the project's existing "one place builds the payload"
+  design. New `EoliaDryHumidityNumber` in `number.py` (translation key
+  `dry_humidity_target`) exposes it, deliberately **not** using `ClimateEntity`'s native
+  `target_humidity` — HA's climate humidity slider has no step-size concept, and this
+  field's valid values are a hard-restricted `{50, 55, 60}`, not a continuous range, so a
+  free-form 1%-granularity slider would let a user pick an invalid value and get a
+  cryptic rejection. A plain `number` entity supports `native_step` directly, so it's
+  used instead (same reasoning that led to `number.py` over `ClimateEntityFeature.
+  TARGET_TEMPERATURE_RANGE` for the double-temp values earlier). The entity is only
+  `available` while `operation_mode` is actually `ComfortableDehumidification` (unlike
+  the double-temp numbers, which stay available independent of current mode, since
+  `/customsettings` is a genuinely separate resource — humidity is not, it's gated purely
+  by current mode with no separate backing resource at all). 90 tests now (up from 83) —
+  `tests/test_coordinator.py` gained 5 new tests for this read-modify-write behavior,
+  `tests/test_number.py` gained 2 (had to instantiate a real entity rather than
+  introspect class attributes directly — HA's `NumberEntity` implements `_attr_*` as
+  class-level properties for its `cached_property` optimization, so accessing them on the
+  class itself returns the descriptor, not the assigned value — a real gotcha worth
+  remembering if it comes up again testing other entity attribute bounds).
 - **Next step**: the actual HA config-flow/entity-registration smoke test (§5 of
   PHASE1_PLAN.md's testing plan) is still the one thing not yet done — everything so far was
-  validated through the CLI tool and direct API calls, not through a real running Home
-  Assistant instance. Symlink (or copy) `custom_components/eolia` into a real HA config,
-  drive the config flow through the actual UI (same manual copy-paste PKCE method), and
-  confirm every entity matches the real app's state 1:1. Also still open: whether/how to
-  wire Dry mode's `humidity` target into a real entity (see above — needs a design
-  decision, not just code), the temperature step (0.5 vs 1.0°C), and the remaining
-  unconfirmed `hvac_mode` bucket entries for rarely-used modes (SmellCare, NanoexCleaning,
-  AutoTempControl, ClothesDryer, Blast) — none of those tested yet either.
+  validated through the CLI tool, direct API calls, and unit tests, not through a real
+  running Home Assistant instance (`coordinator.py`'s new humidity logic specifically has
+  never been exercised live — the CLI tool deliberately doesn't touch coordinator.py, only
+  `auth.py`/`api.py`/`models.py`, so this is unit-tested but not live-tested). Symlink (or
+  copy) `custom_components/eolia` into a real HA config, drive the config flow through the
+  actual UI (same manual copy-paste PKCE method), and confirm every entity matches the
+  real app's state 1:1. Also still open: the temperature step (0.5 vs 1.0°C), and the
+  remaining unconfirmed `hvac_mode` bucket entries for rarely-used modes (SmellCare,
+  NanoexCleaning, AutoTempControl, ClothesDryer, Blast) — none of those tested yet either.
 
 ## How to leave notes for next time
 

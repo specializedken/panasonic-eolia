@@ -77,7 +77,8 @@
     },
     "number": {
       "double_temp_low": { "name": "Double temperature: low" },
-      "double_temp_high": { "name": "Double temperature: high" }
+      "double_temp_high": { "name": "Double temperature: high" },
+      "dry_humidity_target": { "name": "Dry mode humidity target" }
     }
   }
 }

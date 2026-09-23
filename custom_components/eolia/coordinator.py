@@ -21,7 +21,12 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import EoliaApiClient
-from .const import DEFAULT_SCAN_INTERVAL_SECONDS, DOMAIN
+from .const import (
+    DEFAULT_SCAN_INTERVAL_SECONDS,
+    DOMAIN,
+    DRY_MODE_HUMIDITY_RANGE,
+    EoliaOperationMode,
+)
 from .exceptions import EoliaApiError, EoliaAuthError, EoliaClockSkewError, EoliaNetworkError
 from .models import EoliaCustomSettings, EoliaDevice, EoliaStatus
 
@@ -51,6 +56,12 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # findings.md) -- this is the only source of truth for its "current" value, and
         # it can go stale if changed via the physical remote or the real app.
         self._silence_control_cache: dict[str, bool] = {}
+        # Dry mode's (ComfortableDehumidification) humidity target: same write-only,
+        # no-GET-readback situation as silence_control -- see findings.md and
+        # tests/fixtures/live_captures/19. Only ever sent to the server while
+        # operation_mode is actually ComfortableDehumidification (see async_set_status);
+        # every other mode rejects the `humidity` field entirely.
+        self._humidity_cache: dict[str, int] = {}
         # KeepMode's double-temperature range lives on a separate resource
         # (.../customsettings, not /status -- see findings.md and
         # tests/fixtures/live_captures/07). Not part of `self.data` (which
@@ -109,14 +120,18 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         """Return the locally-cached silence_control value (no server-side readback exists)."""
         return self._silence_control_cache.get(appliance_id, False)
 
+    def get_humidity(self, appliance_id: str) -> int:
+        """Return the locally-cached Dry-mode humidity target (no server-side readback exists)."""
+        return self._humidity_cache.get(appliance_id, DRY_MODE_HUMIDITY_RANGE[0])
+
     async def async_set_status(self, appliance_id: str, **changes: Any) -> None:
         """Apply `changes` on top of the last-known status and PUT the result.
 
         `changes` keys must match EoliaStatus field names (operation_mode, temperature,
-        wind_volume, ...) or "silence_control" (handled specially, see class docstring).
-        Single attempt, no auto-retry -- a failed control write should be a deliberate,
-        user-initiated retry, not something that silently fires twice against real
-        hardware.
+        wind_volume, ...) or "silence_control"/"humidity" (both handled specially, see
+        class docstring). Single attempt, no auto-retry -- a failed control write should
+        be a deliberate, user-initiated retry, not something that silently fires twice
+        against real hardware.
         """
         current = (self.data or {}).get(appliance_id)
         if current is None:
@@ -128,7 +143,22 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         for key, value in changes.items():
             if key == "silence_control":
                 self._silence_control_cache[appliance_id] = value
+            elif key == "humidity":
+                self._humidity_cache[appliance_id] = value
             payload[key] = value
+
+        # ComfortableDehumidification ("Dry") targets humidity, not temperature: the
+        # server rejects any nonzero temperature (E-21291-01712) and requires `humidity`
+        # in the payload (E-21291-00007 otherwise) -- the one exception to the general
+        # contract, which deliberately excludes humidity for every other mode. Applied
+        # here (not left to callers) so switching into/out of Dry mode via ANY entity --
+        # climate's preset_mode, the humidity number entity, whatever -- always produces
+        # a valid payload. See findings.md / const.py's DRY_MODE_HUMIDITY_RANGE.
+        if payload["operation_mode"] == EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION:
+            payload["temperature"] = 0.0
+            payload["humidity"] = changes.get("humidity", self.get_humidity(appliance_id))
+        else:
+            payload.pop("humidity", None)
 
         try:
             new_status = await self.api.async_set_status(appliance_id, payload)

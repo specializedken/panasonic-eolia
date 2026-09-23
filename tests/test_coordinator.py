@@ -208,3 +208,71 @@ async def test_set_custom_settings_fetches_first_if_no_cached_data(
     await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_high=27)
 
     coordinator.api.async_get_custom_settings.assert_awaited_once_with(APPLIANCE_ID)
+
+
+# --- Dry mode (ComfortableDehumidification) humidity handling --------------------------
+# Live-confirmed 2026-09-23 (tests/fixtures/live_captures/19-24): this mode requires
+# `humidity` in the payload and rejects any nonzero `temperature` -- the one exception to
+# the general contract.
+
+async def test_switching_to_dry_mode_forces_temp_zero_and_includes_humidity(
+    coordinator, new_status
+):
+    # new_status (control_response fixture) is Cooling @ 20.0 -- a real, nonzero temp.
+    coordinator.async_set_updated_data({APPLIANCE_ID: new_status})
+    coordinator.api.async_set_status.return_value = new_status
+
+    await coordinator.async_set_status(
+        APPLIANCE_ID, operation_mode="ComfortableDehumidification"
+    )
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["operation_mode"] == "ComfortableDehumidification"
+    assert payload["temperature"] == 0.0
+    assert payload["humidity"] == 50  # default when nothing cached yet
+
+
+async def test_dry_mode_humidity_write_is_cached_and_sent(coordinator, new_status):
+    coordinator.async_set_updated_data({APPLIANCE_ID: new_status})
+    coordinator.api.async_set_status.return_value = new_status
+
+    await coordinator.async_set_status(
+        APPLIANCE_ID, operation_mode="ComfortableDehumidification", humidity=60
+    )
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["humidity"] == 60
+    assert coordinator.get_humidity(APPLIANCE_ID) == 60
+
+
+async def test_staying_in_dry_mode_resends_cached_humidity(coordinator, initial_status):
+    # initial_status (status_response fixture) is already ComfortableDehumidification.
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = initial_status
+    await coordinator.async_set_status(
+        APPLIANCE_ID, operation_mode="ComfortableDehumidification", humidity=55
+    )
+
+    # An unrelated later write (still in Dry mode) must still resend the cached humidity.
+    await coordinator.async_set_status(APPLIANCE_ID, nanoex=True)
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["operation_mode"] == "ComfortableDehumidification"
+    assert payload["humidity"] == 55
+    assert payload["temperature"] == 0.0
+
+
+async def test_humidity_excluded_when_target_mode_is_not_dry(coordinator, initial_status):
+    # initial_status is ComfortableDehumidification -- switching away from it.
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = initial_status
+
+    await coordinator.async_set_status(APPLIANCE_ID, operation_mode="Cooling")
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    assert payload["operation_mode"] == "Cooling"
+    assert "humidity" not in payload
+
+
+async def test_get_humidity_defaults_to_lowest_confirmed_value(coordinator):
+    assert coordinator.get_humidity(APPLIANCE_ID) == 50
