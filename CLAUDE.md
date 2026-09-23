@@ -326,15 +326,54 @@ this repo as a design doc if that plan file isn't available in a future session)
     new `tests/test_select.py` and `tests/test_number.py`, plus `test_climate.py` gained
     checks for `KeepMode`'s bucket and the corrected 0-6 swing range. New fixture:
     `tests/fixtures/customsettings_response.json`.
+- **Update, 2026-09-23 continued — dehumidifying modes, and a major new finding:
+  `ComfortableDehumidification` requires `humidity` in the PUT body.** Continued the live
+  walkthrough (captures 17-24 in `tests/fixtures/live_captures/`, index in that dir's
+  `README.md`):
+  - **`CoolDehumidifying` ("Cool & Dehumidify") confirmed live via a real write** — the
+    other half of this project's original motivating question (Dry vs Cool & Dehumidify),
+    previously only confirmed for the Dry side. Has a real settable target temperature
+    (24°C tested), unlike Dry.
+  - **Resolved the `wind_direction` auto asymmetry** left open from the earlier update:
+    writing `wind_direction=0` via the API **does** work and turns the app's vertical-auto
+    toggle on (confirmed by writing it from a fixed position and watching the app's toggle
+    flip). Combined with the earlier finding, the full picture is: the API can always
+    *enter* auto, but can never *leave* it (a `1`-`5` write while already at `0` stays
+    silently inert) — only the app's own toggle can turn auto off.
+  - **Major finding: `ComfortableDehumidification` ("Dry") requires `humidity` in the PUT
+    body — the one exception to the "always exclude humidity" rule** documented back at
+    project start. Also requires `temperature=0.0` (a real value like `24.0` is rejected
+    with `E-21291-01712` — this mode targets humidity, not temperature). Discovered
+    because Kevin knew from the app's UI that Dry mode has a humidity-target slider;
+    three earlier attempts without `humidity` all failed with generic errors
+    (`E-21291-01712`/`E-21291-00007`) and gave no hint that a field outside the normal
+    contract was the actual problem. Bisected the valid range live: **exactly `{50, 55,
+    60}`** (5% steps, capped at 60% — not 80% or 100% as naturally guessed from typical AC
+    humidity-target conventions). Same generic `E-21291-00007` for every rejected value,
+    no distinguishing signal. New constants `DRY_MODE_HUMIDITY_RANGE`/
+    `DRY_MODE_HUMIDITY_STEP` added to `const.py`, plus a corrected comment on
+    `CONTROL_REQUEST_FIELDS` documenting the exception. **Not yet wired into
+    `coordinator.py`/`climate.py`** — same as `silence_control`, `humidity` has zero GET
+    readback (confirmed by checking the response body), so exposing it as a real HA
+    feature (`ClimateEntityFeature.TARGET_HUMIDITY` is the natural fit) would need its own
+    local cache the same way `silence_control` already works. Ask Kevin before building
+    this — it's a real design decision (mode-conditional entity behavior), same as the
+    double-temp integration was.
+  - Also ruled out along the way: plain `Dehumidifying` (as opposed to
+    `ComfortableDehumidification`) was never confirmed as an actual app-reachable option on
+    this device — the app's "dehumidification" menu item turned out to just be
+    `ComfortableDehumidification`. Whether plain `Dehumidifying` is real on any device is
+    still an open question.
 - **Next step**: the actual HA config-flow/entity-registration smoke test (§5 of
-  PHASE1_PLAN.md's testing plan) is still the one thing not yet done — everything above was
+  PHASE1_PLAN.md's testing plan) is still the one thing not yet done — everything so far was
   validated through the CLI tool and direct API calls, not through a real running Home
   Assistant instance. Symlink (or copy) `custom_components/eolia` into a real HA config,
   drive the config flow through the actual UI (same manual copy-paste PKCE method), and
-  confirm every entity — climate, all 3 selects, both numbers, all 4 switches, all 5
-  sensors — matches the real app's state 1:1, including the newly-added ones from today.
-  Also still open: the temperature step (0.5 vs 1.0°C) and the remaining unconfirmed
-  `hvac_mode` bucket entries noted above.
+  confirm every entity matches the real app's state 1:1. Also still open: whether/how to
+  wire Dry mode's `humidity` target into a real entity (see above — needs a design
+  decision, not just code), the temperature step (0.5 vs 1.0°C), and the remaining
+  unconfirmed `hvac_mode` bucket entries for rarely-used modes (SmellCare, NanoexCleaning,
+  AutoTempControl, ClothesDryer, Blast) — none of those tested yet either.
 
 ## How to leave notes for next time
 

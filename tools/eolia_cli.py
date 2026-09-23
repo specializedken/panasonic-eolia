@@ -231,6 +231,12 @@ async def cmd_set(args: argparse.Namespace) -> None:
             payload["air_flow"] = args.air_flow
         if args.wind_shield_hit is not None:
             payload["wind_shield_hit"] = args.wind_shield_hit
+        if args.humidity is not None:
+            # NOT part of EoliaStatus.to_control_fields() -- deliberately excluded there
+            # since it broke every other mode's PUT (see findings.md's "RESOLVED"
+            # section). Injected here only for testing whether some specific mode (e.g.
+            # ComfortableDehumidification/Dry) is the exception and actually requires it.
+            payload["humidity"] = args.humidity
 
         print("About to send this control write to the real device:")
         print(json.dumps(payload, indent=2))
@@ -338,6 +344,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--wind-shield-hit",
         dest="wind_shield_hit",
         help="wind_shield_hit: not_set/shield/hit",
+    )
+    p_set.add_argument(
+        "--humidity",
+        type=int,
+        help=(
+            "EXPERIMENTAL: not part of the normal control-field contract (see "
+            "findings.md) -- only for testing whether a specific mode requires it"
+        ),
     )
     p_set.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompt")
 

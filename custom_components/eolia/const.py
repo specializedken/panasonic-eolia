@@ -142,6 +142,10 @@ ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW = "E-21291-02009"
 # Confirmed live 2026-09-23 by capturing a real PUT from the actual Eolia app: the body
 # must NOT include applianceId (URL only) or humidity, and MUST include silence_control
 # even though it has no readback in GET /status. See findings.md's "RESOLVED" section.
+# CORRECTION, later the same day: "must not include humidity" turned out to be
+# mode-specific, not universal -- ComfortableDehumidification is the one exception that
+# actually REQUIRES humidity (see DRY_MODE_HUMIDITY_RANGE below). humidity stays out of
+# this fixed field list since it's not applicable to any other mode tested.
 CONTROL_REQUEST_FIELDS = (
     "ai_control",
     "air_flow",
@@ -164,15 +168,19 @@ CONTROL_REQUEST_FIELDS = (
 WIND_VOLUME_LEVELS = (0, 1, 2, 3, 4, 5)  # 0 = auto
 
 # wind_direction (vertical louver): live-confirmed 2026-09-23. Two independent axes ride
-# on the same integer: 0=auto (server-side "auto" toggle in the app; while that toggle is
-# on app-side, /status always reports 0 regardless of what value the API last wrote --
-# the write isn't rejected or lost, it's just invisible/inert until auto is turned off in
-# the app; no API field to toggle auto itself has been found), 1-5=fixed positions from
-# "upper" to "straight down" (1, 3, and 5 individually confirmed; 2 and 4 inferred by
-# pattern -- and confirmed as GOOD inferred values, since writing 2 directly worked and
-# was confirmed in the app), 6=swing/oscillate (this one is NOT part of a linear position
-# scale -- it's a distinct continuous-motion mode, but unlike auto, a fixed-position write
-# (1-5) DOES immediately override it via the API alone). See
+# on the same integer: 0=auto, 1-5=fixed positions from "upper" to "straight down" (1, 3,
+# and 5 individually confirmed; 2 and 4 inferred by pattern -- and confirmed as GOOD
+# inferred values, since writing 2 directly worked and was confirmed in the app),
+# 6=swing/oscillate (NOT part of the linear position scale -- a distinct
+# continuous-motion mode). Entering/leaving each state via the API is ASYMMETRIC, both
+# confirmed live: writing 0 always works and puts the unit into auto (confirmed by
+# writing it while in a fixed position and seeing the app's auto toggle turn on);
+# writing 1-5 works when starting from a fixed position OR from swing (6) -- a
+# fixed-position write immediately overrides swing. But writing 1-5 while the unit is
+# ALREADY in auto (0) is silently ignored: /status keeps reporting 0 regardless of what
+# was sent, and the write is not lost (it becomes visible once auto is turned off), just
+# inert until then. No API field to turn auto OFF has been found -- only the app's own
+# vertical-auto toggle does that; the API can freely enter auto but not leave it. See
 # tests/fixtures/live_captures/07 and 15 for the full investigation.
 WIND_DIRECTION_LEVELS = (0, 1, 2, 3, 4, 5, 6)
 WIND_DIRECTION_SWING = 6
@@ -193,3 +201,22 @@ CUSTOM_SETTINGS_REQUEST_FIELDS = ("double_mode_temp", "peak_cut")
 # allows the user to pick. See findings.md.
 DOUBLE_MODE_TEMP_HIGH_RANGE = (21, 30)
 DOUBLE_MODE_TEMP_LOW_RANGE = (16, 25)
+
+# --- ComfortableDehumidification ("Dry") mode's humidity target -----------------------
+# Major finding, live-confirmed 2026-09-23: unlike every other operation_mode tested,
+# ComfortableDehumidification requires `humidity` in the PUT body (the general contract
+# elsewhere deliberately EXCLUDES it -- see CONTROL_REQUEST_FIELDS's docstring and
+# findings.md's "RESOLVED" section) and requires `temperature=0.0` (a real target
+# temperature, e.g. 24.0, is rejected with E-21291-01712 -- this mode doesn't target a
+# temperature, it targets humidity instead). Without `humidity` present at all, every
+# attempt failed with the generic E-21291-00007. Server-validated range, confirmed by
+# direct trial: 50/55/60 all accepted, 40/65/70/85 all rejected (same generic error, no
+# distinguishing code) -- so the real range is 50-60 inclusive in 5% steps (NOT up to 80
+# or 100 as naively guessed from the AC's cooling-side conventions). Like
+# `silence_control`, this field has no GET readback at all -- EoliaStatus doesn't model
+# it, coordinator.py would need its own local cache the same way it does for
+# silence_control if this becomes a real HA-controllable feature (e.g. via
+# ClimateEntityFeature.TARGET_HUMIDITY) rather than just a documented finding. See
+# tests/fixtures/live_captures/19-24 for the full trial-and-error sequence.
+DRY_MODE_HUMIDITY_RANGE = (50, 60)
+DRY_MODE_HUMIDITY_STEP = 5

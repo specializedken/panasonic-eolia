@@ -1,0 +1,46 @@
+{
+  "description": "operation_mode=ComfortableDehumidification (Dry) rejected 3 times (temp=24 -> E-21291-01712; temp=0 -> E-21291-00007; temp=0 + ai_control=off -> E-21291-00007 again) before Kevin's insight: this mode needs `humidity` included in the PUT body, which the general contract (CONTROL_REQUEST_FIELDS) deliberately excludes for every other mode. First success: temperature=0.0 + humidity=50.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "ComfortableDehumidification",
+    "operation_status": true,
+    "temperature": 0.0,
+    "timer_value": 0,
+    "wind_direction": 0,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false,
+    "humidity": 50
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "ComfortableDehumidification",
+    "ai_control": "comfortable",
+    "temperature": 0.0,
+    "wind_volume": 0,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 21.5,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows Dry mode active with a 50% humidity target.",
+  "notes": [
+    "MAJOR FINDING: humidity, which the general control-request contract deliberately excludes (see findings.md's 'RESOLVED' section), is actually REQUIRED for this one mode. Without it, every attempt failed regardless of temperature or ai_control value.",
+    "temperature=0.0 is correct for this mode -- it targets humidity, not temperature. temperature=24.0 (a real value) was rejected with E-21291-01712 (temperature-out-of-range), confirming this mode genuinely has no temperature target.",
+    "humidity has no GET readback, same as silence_control -- confirmed by checking the response body, which has no humidity field at all.",
+    "The response also doesn't echo the humidity value in any form -- can't verify what value 'stuck' from the response alone, only via the app.",
+    "See 20-24 for the humidity range investigation that followed."
+  ]
+}

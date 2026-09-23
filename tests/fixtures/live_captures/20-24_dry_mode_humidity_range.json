@@ -1,0 +1,18 @@
+{
+  "description": "Trial-and-error sequence mapping the valid humidity target range for ComfortableDehumidification (Dry) mode, each attempt otherwise identical to 19's payload (temperature=0.0, everything else carried over unchanged). Bundled into one file since each individual attempt is a single-field variation of the same request -- see const.py's DRY_MODE_HUMIDITY_RANGE for the resulting constant.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "trials": [
+    {"humidity": 40, "result": "REJECTED", "code": "E-21291-00007", "note": "Kevin's hypothesis: 50 is the lowest valid setting -- confirmed by this rejection."},
+    {"humidity": 50, "result": "ACCEPTED", "app_confirmed": "50% shown in app (see 19)"},
+    {"humidity": 55, "result": "ACCEPTED", "app_confirmed": "55% shown in app"},
+    {"humidity": 60, "result": "ACCEPTED", "app_confirmed": "not individually re-confirmed in-app, but same success pattern as 50/55"},
+    {"humidity": 65, "result": "REJECTED", "code": "E-21291-00007", "note": "First rejection above the confirmed-working values -- establishes the ceiling."},
+    {"humidity": 70, "result": "REJECTED", "code": "E-21291-00007"},
+    {"humidity": 85, "result": "REJECTED", "code": "E-21291-00007", "note": "Tested first, before narrowing down -- Kevin's initial guess was 80% as the ceiling with 5% steps, which this trial sequence disproves."}
+  ],
+  "notes": [
+    "RESOLVED: valid humidity range for Dry mode is exactly {50, 55, 60} -- 3 discrete values, 5% steps, capped at 60%. NOT 80% or 100% as would be naively assumed from typical AC humidity-target conventions -- this unit's Dry mode genuinely only offers a narrow 50-60% band.",
+    "All rejections used the same generic E-21291-00007 code regardless of how far outside the valid range the value was (40 and 85 both equally rejected, no distinguishing 'out of range' signal) -- the only way to find the boundary was bisection via repeated live trials, there's no error message that states the valid range directly.",
+    "Final action: set humidity back to 55 (Kevin's last app-confirmed value) to leave the device in a known-good state, rather than leaving it on whatever the last (rejected) attempt implied."
+  ]
+}

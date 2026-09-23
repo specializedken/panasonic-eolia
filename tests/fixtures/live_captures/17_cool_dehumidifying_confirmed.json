@@ -1,0 +1,42 @@
+{
+  "description": "operation_mode=CoolDehumidifying, visually confirmed in the app as 'Cool & Dehumidify' with a settable temperature target (24C) -- the other half of the project's original motivating 'Dry vs Cool & Dehumidify' question, now live-confirmed via an actual control write (the Dry/ComfortableDehumidification half was already confirmed back at project start, since the unit happened to be running it then).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "CoolDehumidifying",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 2,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "CoolDehumidifying",
+    "ai_control": "comfortable",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 2,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 21.0,
+    "inside_humidity": 75,
+    "outside_temp": 21.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows 'Cool & Dehumidify' with a 24C target temperature.",
+  "notes": [
+    "CONFIRMED: EoliaOperationMode.COOL_DEHUMIDIFYING wire value round-trips correctly and matches the app's distinct 'Cool & Dehumidify' mode label, with its own settable target temperature (distinct from plain Dehumidifying, which real ACs typically don't let you set a specific target temp for). Closes the loop on this project's original motivating question via a real live control write, not just decompiled strings.",
+    "Went through without hitting the 2-minute lockout -- no app interaction happened in between this write and the prior one."
+  ]
+}

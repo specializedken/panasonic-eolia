@@ -1,42 +1,43 @@
 # Live validation captures — 2026-09-23
 
-Real request/response pairs captured via `tools/eolia_cli.py set` against Kevin's real
-unit ("Yurt", `CS-712DX2-W`), each confirmed against the official Eolia app's displayed
-state before moving to the next one. Purpose: validate every feature end-to-end on real
-hardware, and record fixtures to fold into `tests/` later (either as new parametrized
-cases or to replace the provisional/guessed values flagged in `PHASE1_PLAN.md`/
-`const.py`).
+Real request/response pairs captured via `tools/eolia_cli.py` against Kevin's real unit
+("Yurt", `CS-712DX2-W`), each cross-checked against the official Eolia app's displayed
+state. Purpose: validate every feature end-to-end on real hardware before/alongside
+wiring it into `custom_components/eolia/`, and keep fixtures around for `tests/`.
 
-Each file: `NN_description.json` with `request` (exact PUT body sent), `response` (exact
-PUT response body), `app_confirmed` (what the official app showed after, once Kevin
-checked — `null` until confirmed), and `notes` (anything surprising).
+Each file: `NN_description.json` with `request` (exact PUT body sent, when there was
+one), `response` (exact PUT/GET response body), `app_confirmed` (what the official app
+showed, once Kevin checked), and `notes` (anything surprising). See each file for full
+detail — this README is just an index pointing at the headline finding of each.
 
 ## Log
 
-1. **`01_power_on_cooling.json`** — power on + `operation_mode=Cooling` + `temperature=24.0`.
-   - First attempt carried over `temperature=0.0` from the prior `Stop` state unmodified
-     -> rejected with a **new error code, `E-21291-01712`** (generic "an application
-     error occurred" message, same shape as the already-known `E-21291-00007`). Not
-     previously documented; add to `findings.md`'s known-error-codes list. Leading
-     theory: server validates `temperature` against `operation_mode` whenever
-     `operation_status=true`, and `0.0` is out of Cooling's valid range.
-   - Retried with `temperature=24.0`, everything else identical (including
-     `wind_volume=0`) -> succeeded.
-   - `wind_volume=0` was accepted -> supports the provisional "0 = auto" guess.
-   - `outside_temp` stayed `999.0` even with the unit on, contradicting the "999 only
-     while off" theory floated right after the first live `status` call today. Needs
-     more observation across the rest of this session.
-   - App confirmation: pending.
+| # | What | Headline finding |
+|---|---|---|
+| 01 | Power on, `Cooling` @ 24°C | New error `E-21291-01712` (temperature out of range for an active mode) when `temperature=0.0` carries over from `Stop`. `wind_volume=0`="auto" theory supported. |
+| 02, 04 | Lockout hits | New error `E-21291-01718` — confirmed live: the **official app writes even on a no-op menu close**, locking out other clients for ~2 min. |
+| 03, 05, 06 | `nanoex` off, all 3 `ai_control` values | All confirmed against the app. |
+| 07 | `KeepMode` ("double temperature setting") | Confirmed at the wire level; the low/high range is **not** in `/status` — see 16 and `findings.md` for where it actually lives. |
+| 08, 09 | `wind_volume` 0 and 1 | 0=Auto, 1="Minimal" confirmed in-app. Also: `ai_control` drifted `comfortable_econavi`→`comfortable` on its own, unexplained one-off (Kevin confirmed he didn't touch it). |
+| 10–12 | `air_flow`: quiet/powerful/long | All 3 confirmed in-app; independent of `wind_volume` (`long` visibly increases airflow even at `wind_volume=0`). |
+| 13–14 | `wind_shield_hit`: shield/hit | Both confirmed in-app (avoid-people / aim-at-people). |
+| 15 | `wind_direction` full range | Real range is **0–6, not 0–5**: 1-5=fixed positions (1=upper, 3≈medium, 5=straight down), **6=swing** (a previously-unknown state, found via the app's "left-right arrow" toggle). |
+| 16 | First-ever `PUT /customsettings` | Minimal field set works (no `operation_token` needed in the request; it *is* present in the PUT response only, mirroring `/status`). New error `E-21291-02009` (double-temp high/low need a ≥5°C gap). |
+| 17 | `CoolDehumidifying` | Confirmed as the app's "Cool & Dehumidify", with a real settable target temperature — closes the project's original motivating question via a live write, not just decompiled strings. |
+| 18 | `wind_direction=0` via API | Confirmed the API **can** freely enter auto (resolves the asymmetry from 15: entering auto always works, but a fixed-position write while already in auto is silently ignored — no API way to *leave* auto, only the app's own toggle does that). |
+| 19 | `ComfortableDehumidification` ("Dry") | **Major finding**: this mode requires `humidity` in the PUT body — the one exception to the general "exclude humidity" rule — and `temperature=0.0` (it targets humidity, not temperature). Three earlier attempts without `humidity` all failed. |
+| 20-24 | Dry mode's humidity range | Bisected live: valid values are exactly **{50, 55, 60}** (5% steps, capped at 60% — not 80%/100% as naively guessed). Same generic error for every rejected value, no distinguishing "out of range" signal. |
 
-## Open questions to fold back into `findings.md` once this session wraps
+## Open questions still unresolved
 
-- Full list of `E-21291-*` codes seen (now 3: `00002` clock-skew, `00007` generic,
-  `01712` generic/possibly temperature-range). Do `00007` and `01712` actually mean
-  different things, or is `01712` also just a generic catch-all the same way `00007`
-  turned out to be non-specific? Not fully confirmed -- `01712` was only ever seen with
-  an invalid temperature so far, so the correlation could be coincidental. Worth
-  deliberately re-triggering to check if it's specific to temperature or generic.
-- Whether `temperature=0.0` is rejected for *every* active `operation_mode`, or only
-  some (e.g. maybe `Heating` has a different valid range check than `Cooling`).
-- What's actually driving `outside_temp=999.0` -- sensor availability, update lag, or
-  something else. Keep recording it on every capture in this session.
+- The `ai_control` drift seen in 09 (`comfortable_econavi`→`comfortable` with no write from
+  either side) — one-off, not reproduced since, not understood.
+- `outside_temp=999.0` right at power-on, before settling to a real reading a few minutes
+  later — sensor warm-up lag is the leading theory, not confirmed.
+- Whether `temperature=0.0` is required/rejected the same way for other rarely-used
+  `operation_mode` values (SmellCare, NanoexCleaning, AutoTempControl, ClothesDryer,
+  Blast, etc.) — none of those tested yet.
+- Whether plain `Dehumidifying` (as opposed to `ComfortableDehumidification`) is a real,
+  separately-selectable mode on this device at all — the app's "dehumidification" menu
+  item turned out to just be `ComfortableDehumidification`; plain `Dehumidifying` was
+  never confirmed as an actual app-reachable option, only as a decompiled enum string.

@@ -1,0 +1,42 @@
+{
+  "description": "Writing wind_direction=0 via the API, starting from a fixed position (2), confirmed to actually turn the app's vertical-auto toggle ON -- resolves the asymmetry left open in capture 15: the API CAN freely enter auto, it just can't leave it (a fixed-position write while already in auto is silently ignored, per 15's findings).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "CoolDehumidifying",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 0,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "CoolDehumidifying",
+    "ai_control": "comfortable",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 20.5,
+    "inside_humidity": 75,
+    "outside_temp": 21.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows the vertical louver back in Auto mode. Also cross-checked nanoex=off and ai_control=comfortable (AI on, no ECONAVI) against the app -- both matched the last-known API state with no drift this time.",
+  "notes": [
+    "CONFIRMED: the API can freely ENTER auto (wind_direction=0) from any state (tested from a fixed position; not yet tested from swing/6, but no reason to expect it'd behave differently). Combined with capture 15's finding that the API canNOT exit auto (a 1-5 write while already at 0 is silently ignored, only the app's own toggle can turn auto off), the full picture is: entering auto via the API always works; leaving auto via the API never works. const.py's WIND_DIRECTION_LEVELS comment updated to reflect this precisely.",
+    "No ai_control drift this time (stayed 'comfortable' as expected) -- the earlier drift in capture 09 (comfortable_econavi -> comfortable with no request from either side) still stands as an unexplained one-off, not a reproducible pattern."
+  ]
+}
