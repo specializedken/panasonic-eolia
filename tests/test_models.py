@@ -37,6 +37,19 @@ def test_status_from_dict_defaults_missing_optional_fields():
     assert status.operation_token is None
 
 
+def test_outside_temp_sentinel_becomes_none():
+    # Live-confirmed repeatedly (right after power-on, and again on power-off): the API
+    # sends 999.0 as a "no reading available" sentinel instead of omitting the field or
+    # sending null. Must never surface as a literal 999C sensor reading in HA.
+    status = EoliaStatus.from_dict({"appliance_id": "X", "outside_temp": 999.0})
+    assert status.outside_temp is None
+
+
+def test_outside_temp_real_value_passes_through():
+    status = EoliaStatus.from_dict({"appliance_id": "X", "outside_temp": 23.0})
+    assert status.outside_temp == 23.0
+
+
 def test_to_control_fields_excludes_applianceid_and_humidity(status_response):
     # The real GET response has a `humidity` field -- to_control_fields() must never
     # re-emit it, and must never emit appliance_id (URL-only) or silence_control

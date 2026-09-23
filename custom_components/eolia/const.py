@@ -38,6 +38,12 @@ EOLIA_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
 DEFAULT_SCAN_INTERVAL_SECONDS = 60  # unvalidated guess -- findings.md documents no rate limit
 
+# outside_temp uses this as a sentinel for "no reading available" rather than omitting
+# the field or sending null -- live-confirmed 2026-09-23 (repeatedly): shows up right
+# after power-on before the outdoor sensor's first real reading arrives, and again
+# immediately on power-off. models.py treats it the same as an absent value.
+OUTSIDE_TEMP_UNAVAILABLE_SENTINEL = 999.0
+
 # Refresh the access token once less than this much time remains before its confirmed
 # expiry (access tokens are issued with a 14-day lifetime).
 TOKEN_REFRESH_MARGIN_SECONDS = 24 * 60 * 60

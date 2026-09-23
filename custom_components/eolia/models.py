@@ -13,7 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Self
 
-from .const import CONTROL_REQUEST_FIELDS, CUSTOM_SETTINGS_REQUEST_FIELDS
+from .const import (
+    CONTROL_REQUEST_FIELDS,
+    CUSTOM_SETTINGS_REQUEST_FIELDS,
+    OUTSIDE_TEMP_UNAVAILABLE_SENTINEL,
+)
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -89,7 +93,7 @@ class EoliaStatus:
             timer_value=int(data.get("timer_value", 0)),
             inside_temp=_optional_float(data.get("inside_temp")),
             inside_humidity=_optional_int(data.get("inside_humidity")),
-            outside_temp=_optional_float(data.get("outside_temp")),
+            outside_temp=_outside_temp(data.get("outside_temp")),
             aq_name=data.get("aq_name"),
             aq_value=_optional_int(data.get("aq_value")),
             device_errstatus=data.get("device_errstatus"),
@@ -192,3 +196,13 @@ def _optional_float(value: Any) -> float | None:
 
 def _optional_int(value: Any) -> int | None:
     return None if value is None else int(value)
+
+
+def _outside_temp(value: Any) -> float | None:
+    """outside_temp uses OUTSIDE_TEMP_UNAVAILABLE_SENTINEL (999.0) as a sentinel for "no
+    reading available" rather than omitting the field or sending null -- confirmed live
+    repeatedly (see const.py). Treat it the same as an absent value so it never shows up
+    as a literal 999C reading in HA.
+    """
+    temp = _optional_float(value)
+    return None if temp == OUTSIDE_TEMP_UNAVAILABLE_SENTINEL else temp
