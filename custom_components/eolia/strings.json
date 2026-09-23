@@ -59,6 +59,39 @@
               "Stop": "Stop",
               "Other": "Other"
             }
+          },
+          "fan_mode": {
+            "state": {
+              "0": "Auto",
+              "1": "Minimum",
+              "2": "Low",
+              "3": "Medium",
+              "4": "High",
+              "5": "Maximum"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "0": "Auto",
+              "1": "Upper",
+              "2": "Upper-middle",
+              "3": "Middle",
+              "4": "Middle-lower",
+              "5": "Straight down",
+              "6": "Swing"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "front": "Straight ahead",
+              "spot": "Spot (focused)",
+              "wide": "Wide (spread)",
+              "to_left": "Left",
+              "nearby_left": "Slightly left",
+              "nearby_right": "Slightly right",
+              "to_right": "Right",
+              "auto": "Auto"
+            }
           }
         }
       }
