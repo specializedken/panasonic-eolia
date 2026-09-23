@@ -159,6 +159,15 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
             )
         return HomeAssistantError(f"Failed to update {what}: {err}")
 
+    def _remember_humidity(self, appliance_id: str, status: EoliaStatus) -> None:
+        # The Dry target IS reported by the server (GET and PUT responses) while in Dry, so
+        # an HA restart doesn't have to reset it to the default (live 2026-09-23).
+        if (
+            status.operation_mode == EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION
+            and status.humidity is not None
+        ):
+            self._humidity_cache[appliance_id] = status.humidity
+
     def _remember_temperature(self, appliance_id: str, status: EoliaStatus) -> None:
         if status.temperature:
             self._temperature_cache[appliance_id] = status.temperature
@@ -169,6 +178,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
             statuses[appliance_id] = await self._async_get_status(appliance_id)
             self._remember_temperature(appliance_id, statuses[appliance_id])
             self._remember_mode(appliance_id, statuses[appliance_id])
+            self._remember_humidity(appliance_id, statuses[appliance_id])
             await self._async_fetch_functions(appliance_id)
             await self._async_refresh_custom_settings(appliance_id)
         return statuses
@@ -300,6 +310,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
             self._operation_token_cache[appliance_id] = new_status.operation_token
         self._remember_temperature(appliance_id, new_status)
         self._remember_mode(appliance_id, new_status)
+        self._remember_humidity(appliance_id, new_status)
 
         updated = dict(self.data or {})
         updated[appliance_id] = new_status
@@ -331,6 +342,14 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 f"requested {requested_mode!r}, got back {new_status.operation_mode!r}. "
                 "This usually means the requested mode isn't actually selectable on "
                 "this device via the API, even though it appears in the picker."
+            )
+
+        # Live-confirmed 2026-09-23: Blast and ClothesDryer answer 200 but store
+        # ai_control=off when asked for an AI mode (the app hides AI there too).
+        if "ai_control" in changes and new_status.ai_control != changes["ai_control"]:
+            raise HomeAssistantError(
+                "The unit ignored the AI mode change -- AI isn't available in "
+                f"{new_status.operation_mode} mode."
             )
 
     async def _async_set_custom_settings(self, appliance_id: str, **changes: Any) -> None:

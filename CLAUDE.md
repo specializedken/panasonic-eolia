@@ -520,14 +520,25 @@ this repo as a design doc if that plan file isn't available in a future session)
     (`E-21291-01711`): turning nanoeX off in `Nanoe` re-sent `operation_mode: Nanoe`.
     `coordinator` now sends `Blast` whenever the current mode reads `Nanoe`. Confirmed live
     both ways: Blast + nanoeX on -> `Nanoe` (`200`), nanoeX off -> `Blast` (`200`).
-  - **Still-untested combinations** (ranked; the first two and the nanoeX one are done): double-temp low/high changes while `KeepMode`
+  - **Per-mode hidden settings audited.** Fan speed is honoured in `ClothesDryer` and Dry
+    (the app hides it but the server stores it). `ai_control` is silently reverted to `off`
+    (`200 OK`) in `Blast` and `ClothesDryer`, but stored in Dry; `coordinator` now raises
+    "The unit ignored the AI mode change -- AI isn't available in <mode> mode" when a
+    requested `ai_control` comes back different (confirmed live in HA for `Blast`).
+  - **Dry humidity IS readable** (correction to the "write-only" claim above): the server
+    reports `humidity` in GET and PUT responses while in Dry. `EoliaStatus.humidity` is
+    parsed and the coordinator restores its cache from it, so an HA restart no longer
+    resets the target to 50 (it did, live). `silence_control` is still genuinely write-only.
+  - **Still-untested combinations** (ranked; the first two, the nanoeX one and the per-mode
+    hidden settings are done -- louvers in `KeepMode` and `air_flow`/shield-hit in the clean
+    modes weren't individually tried): double-temp low/high changes while `KeepMode`
     is on (and the >=5 gap from two separate sliders); settings the app hides per mode
     (fan speed in Dry/ClothesDryer, `ai_control` in ClothesDryer/Blast, louvers in
     KeepMode, `air_flow`/shield-hit in the clean modes); changing settings during a clean
     mode (the "AC is off" guard fires); nanoeX toggling around `Nanoe`; `CoolDehumidifying`
     through HA; first write after an HA restart (in-memory `operation_token`/
     `silence_control`/humidity caches lost); token refresh; multiple devices.
-  - 183 tests now (up from 132 at the start of this pass).
+  - 185 tests now (up from 132 at the start of this pass).
 - **Next step**: resume the live "impossible combinations" audit -- systematically drive
   every remaining `operation_mode`/field combination through the real HA UI while
   watching `docker logs -f homeassistant | grep -i eolia` (the debug logger is still on

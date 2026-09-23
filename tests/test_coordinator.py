@@ -313,7 +313,10 @@ async def test_dry_mode_humidity_write_is_cached_and_sent(coordinator, new_statu
 async def test_staying_in_dry_mode_resends_cached_humidity(coordinator, initial_status):
     # initial_status (status_response fixture) is already ComfortableDehumidification.
     coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
-    coordinator.api.async_set_status.return_value = initial_status
+    # The real server echoes the stored target back.
+    coordinator.api.async_set_status.return_value = EoliaStatus.from_dict(
+        {**_dry_body(initial_status), "humidity": 55}
+    )
     await coordinator.async_set_status(
         APPLIANCE_ID, operation_mode="ComfortableDehumidification", humidity=55
     )
@@ -625,6 +628,43 @@ async def test_writes_while_in_nanoe_send_blast_instead(coordinator, initial_sta
     _, payload = coordinator.api.async_set_status.call_args.args
     assert payload["operation_mode"] == "Blast"
     assert payload["nanoex"] is False
+
+
+async def test_ai_control_silently_reverted_by_the_unit_raises_a_clear_error(
+    coordinator, initial_status
+):
+    # Live 2026-09-23: in Blast/ClothesDryer, ai_control=comfortable gets 200 but is stored
+    # as off.
+    blast = _status_with_mode(initial_status, "Blast")
+    coordinator.async_set_updated_data({APPLIANCE_ID: blast})
+    coordinator.api.async_set_status.return_value = blast  # still ai_control off
+
+    with pytest.raises(HomeAssistantError, match="AI isn't available in Blast"):
+        await coordinator.async_set_status(APPLIANCE_ID, ai_control="comfortable")
+
+    assert coordinator.data[APPLIANCE_ID] is blast
+
+
+async def test_dry_humidity_is_restored_from_the_server_after_a_restart(
+    coordinator, initial_status, initial_custom_settings
+):
+    # The Dry target is reported in GET responses while in Dry, so a fresh coordinator
+    # (empty cache, e.g. after an HA restart) learns it instead of defaulting to 50.
+    dry = EoliaStatus.from_dict({**_dry_body(initial_status), "humidity": 55})
+    coordinator.api.async_get_status.return_value = dry
+    coordinator.api.async_get_custom_settings.return_value = initial_custom_settings
+
+    await coordinator._async_update_data()
+
+    assert coordinator.get_humidity(APPLIANCE_ID) == 55
+
+
+def _dry_body(status: EoliaStatus) -> dict:
+    return {
+        **status.to_control_fields(),
+        "appliance_id": status.appliance_id,
+        "operation_mode": "ComfortableDehumidification",
+    }
 
 
 async def test_get_humidity_defaults_to_lowest_confirmed_value(coordinator):

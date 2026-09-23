@@ -73,6 +73,9 @@ class EoliaStatus:
     device_errstatus: bool | None
     operation_priority: bool | None
     operation_token: str | None  # only present on PUT responses, not GET
+    # Only reported while operation_mode is ComfortableDehumidification (Dry): the target.
+    # Never sent back via to_control_fields() -- the coordinator injects it for Dry only.
+    humidity: int | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
@@ -99,6 +102,7 @@ class EoliaStatus:
             device_errstatus=data.get("device_errstatus"),
             operation_priority=data.get("operation_priority"),
             operation_token=data.get("operation_token"),
+            humidity=_optional_int(data.get("humidity")),
         )
 
     def to_control_fields(self) -> dict[str, Any]:
