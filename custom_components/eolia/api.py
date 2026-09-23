@@ -114,6 +114,11 @@ class EoliaApiClient:
     ) -> dict[str, Any]:
         access_token = await self._auth.async_get_access_token()
         url = f"{API_BASE_URL}{path}"
+        # Full request/response logging at DEBUG (never the Authorization header/token) --
+        # added 2026-09-23 to watch live HA<->API traffic while testing real entity
+        # interactions for combinations that produce a server-side error. Enable via HA's
+        # logger integration: custom_components.eolia.api: debug.
+        _LOGGER.debug("Eolia API request: %s %s body=%s", method, path, json_body)
         try:
             async with self._session.request(
                 method, url, headers=self._headers(access_token), json=json_body
@@ -152,12 +157,22 @@ class EoliaApiClient:
                             code,
                             message,
                         )
+                    _LOGGER.debug(
+                        "Eolia API response: %s %s -> %s body=%s",
+                        method,
+                        path,
+                        resp.status,
+                        body,
+                    )
                     if code == ERROR_CODE_CLOCK_SKEW:
                         raise EoliaClockSkewError(resp.status, code, message)
                     if code == ERROR_CODE_DEVICE_LOCKED:
                         raise EoliaDeviceLockedError(resp.status, code, message)
                     raise EoliaApiError(resp.status, code, message)
 
+                _LOGGER.debug(
+                    "Eolia API response: %s %s -> %s body=%s", method, path, resp.status, body
+                )
                 return body
         except ClientError as err:
             raise EoliaNetworkError(f"Network error calling {method} {path}: {err}") from err
