@@ -28,6 +28,7 @@ from .const import (
     DOUBLE_MODE_TEMP_LOW_RANGE,
     DRY_MODE_HUMIDITY_RANGE,
     FALLBACK_TEMPERATURE,
+    CLEAN_FAMILY_MODES,
     NO_TARGET_TEMPERATURE_MODES,
     EoliaOperationMode,
 )
@@ -98,6 +99,26 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # appliance_id. Absent = not fetched (yet, or the fetch failed): treated as
         # "unknown, allow everything" so a failure here never removes working features.
         self.functions: dict[str, dict[str, bool]] = {}
+        # Last real running mode, so a bare power-on (climate.turn_on) has a mode to use:
+        # sending the carried-over "Stop" is rejected with E-21291-01711 (live 2026-09-23).
+        # Mirrors the app's own "last drive mode", which also never saves the clean family.
+        self._last_mode_cache: dict[str, str] = {}
+
+    def _remember_mode(self, appliance_id: str, status: EoliaStatus) -> None:
+        mode = status.operation_mode
+        if not status.operation_status or mode in (
+            EoliaOperationMode.STOP,
+            EoliaOperationMode.OTHER,
+            *CLEAN_FAMILY_MODES,
+        ):
+            return
+        # Nanoe is not requestable; it is what Blast + nanoeX reads back as.
+        if mode == EoliaOperationMode.NANOE:
+            mode = EoliaOperationMode.BLAST
+        self._last_mode_cache[appliance_id] = str(mode)
+
+    def get_last_mode(self, appliance_id: str) -> str:
+        return self._last_mode_cache.get(appliance_id, EoliaOperationMode.AUTO.value)
 
     def supports(self, appliance_id: str, function_id: str) -> bool:
         flags = self.functions.get(appliance_id)
@@ -122,6 +143,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         for appliance_id in self.devices:
             statuses[appliance_id] = await self._async_get_status(appliance_id)
             self._remember_temperature(appliance_id, statuses[appliance_id])
+            self._remember_mode(appliance_id, statuses[appliance_id])
             await self._async_fetch_functions(appliance_id)
             await self._async_refresh_custom_settings(appliance_id)
         return statuses
@@ -238,6 +260,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         if new_status.operation_token:
             self._operation_token_cache[appliance_id] = new_status.operation_token
         self._remember_temperature(appliance_id, new_status)
+        self._remember_mode(appliance_id, new_status)
 
         updated = dict(self.data or {})
         updated[appliance_id] = new_status

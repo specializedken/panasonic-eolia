@@ -314,6 +314,17 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
         )
 
     async def async_turn_on(self) -> None:
+        status = self._status
+        if status is not None and status.operation_mode in (
+            EoliaOperationMode.STOP,
+            EoliaOperationMode.OTHER,
+        ):
+            # Powering on with the carried-over "Stop" mode is rejected (E-21291-01711,
+            # live 2026-09-23), so go through the preset path with the last running mode.
+            await self.async_set_preset_mode(
+                self.coordinator.get_last_mode(self._appliance_id)
+            )
+            return
         await self.coordinator.async_set_status(self._appliance_id, operation_status=True)
 
     async def async_turn_off(self) -> None:

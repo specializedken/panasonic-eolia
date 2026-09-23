@@ -359,3 +359,30 @@ def test_target_temperature_limits_match_the_units_range(coordinator):
     entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
     assert entity.min_temp == 16.0
     assert entity.max_temp == 30.0
+
+
+async def test_bare_power_on_from_stop_uses_the_last_running_mode(coordinator):
+    # Live-confirmed 2026-09-23: climate.turn_on carried operation_mode=Stop and got
+    # E-21291-01711.
+    coordinator.async_set_updated_data({APPLIANCE_ID: _status(operation_status=False)})
+    coordinator._last_mode_cache[APPLIANCE_ID] = "Heating"
+    coordinator.async_set_status = AsyncMock()
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_turn_on()
+
+    coordinator.async_set_status.assert_awaited_once_with(
+        APPLIANCE_ID, operation_status=True, operation_mode="Heating"
+    )
+
+
+async def test_bare_power_on_with_no_history_falls_back_to_auto(coordinator):
+    coordinator.async_set_updated_data({APPLIANCE_ID: _status(operation_status=False)})
+    coordinator.async_set_status = AsyncMock()
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_turn_on()
+
+    coordinator.async_set_status.assert_awaited_once_with(
+        APPLIANCE_ID, operation_status=True, operation_mode="Auto"
+    )

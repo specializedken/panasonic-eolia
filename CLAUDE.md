@@ -498,7 +498,21 @@ this repo as a design doc if that plan file isn't available in a future session)
     HA's default 7-35C let a `35.0` through, rejected `E-21291-00007` in Auto. `Auto` at
     25 and 30 confirmed live. **Dry humidity number confirmed live through HA** (`55`
     sent, echoed back).
-  - 166 tests now (up from 132 at the start of this pass).
+  - **Bare `climate.turn_on` was broken, now fixed** (found in the post-audit gap review):
+    it carried `operation_mode: Stop` into a power-on write, rejected `E-21291-01711`. The
+    thermostat-style card has no power button (on = pick a mode), so this only bites the
+    service (automations/voice). `coordinator` now remembers the last real running mode
+    (`_last_mode_cache`; never the clean family, `Nanoe` saved as `Blast`) and `turn_on`
+    powers on into it via the preset path, falling back to `Auto` (e.g. after an HA
+    restart). Confirmed live: `Auto`, `200`.
+  - **Still-untested combinations** (ranked): double-temp low/high changes while `KeepMode`
+    is on (and the >=5 gap from two separate sliders); settings the app hides per mode
+    (fan speed in Dry/ClothesDryer, `ai_control` in ClothesDryer/Blast, louvers in
+    KeepMode, `air_flow`/shield-hit in the clean modes); changing settings during a clean
+    mode (the "AC is off" guard fires); nanoeX toggling around `Nanoe`; `CoolDehumidifying`
+    through HA; first write after an HA restart (in-memory `operation_token`/
+    `silence_control`/humidity caches lost); token refresh; multiple devices.
+  - 174 tests now (up from 132 at the start of this pass).
 - **Next step**: resume the live "impossible combinations" audit -- systematically drive
   every remaining `operation_mode`/field combination through the real HA UI while
   watching `docker logs -f homeassistant | grep -i eolia` (the debug logger is still on

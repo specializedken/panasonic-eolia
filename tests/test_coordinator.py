@@ -501,6 +501,32 @@ async def test_powering_off_is_not_flagged_as_a_mode_mismatch(coordinator, initi
     assert coordinator.data[APPLIANCE_ID] is stopped
 
 
+@pytest.mark.parametrize(
+    ("mode", "running", "expected"),
+    [
+        ("Cooling", True, "Cooling"),
+        ("Nanoe", True, "Blast"),
+        ("KeepMode", True, "KeepMode"),
+        ("Heating", False, "Auto"),  # not running -> not remembered
+        ("Stop", True, "Auto"),
+        ("SmellCare", True, "Auto"),  # the clean family is never a "last mode"
+    ],
+)
+async def test_last_mode_is_remembered_for_bare_power_on(
+    coordinator, initial_status, mode, running, expected
+):
+    status = EoliaStatus.from_dict(
+        {
+            **initial_status.to_control_fields(),
+            "appliance_id": APPLIANCE_ID,
+            "operation_status": running,
+            "operation_mode": mode,
+        }
+    )
+    coordinator._remember_mode(APPLIANCE_ID, status)
+    assert coordinator.get_last_mode(APPLIANCE_ID) == expected
+
+
 async def test_get_humidity_defaults_to_lowest_confirmed_value(coordinator):
     assert coordinator.get_humidity(APPLIANCE_ID) == 50
 
