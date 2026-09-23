@@ -186,12 +186,13 @@ this repo as a design doc if that plan file isn't available in a future session)
   Status section above) but **still not runtime-tested against a real, running Home
   Assistant** (config flow through an actual UI, real entity registration, etc.) — that part
   still resumes on europa, which already has HA installed. See "Next step" above.
-- **Provisional/unconfirmed values to validate on real hardware once testable on europa**:
-  `wind_volume`/`wind_direction` level ranges (guessed `0–5`, only `3` ever observed live),
-  temperature step (guessed `1.0°C`, the one live capture doesn't disambiguate 0.5 vs 1.0),
-  the `hvac_mode` bucket table for the less common `operation_mode` values (SmellCare,
-  NanoexCleaning, AutoTempControl, etc. — bucketed by best guess, not confirmed against real
-  device behavior).
+- **Provisional/unconfirmed values, updated 2026-09-23 (most are now resolved — see the big
+  update below)**: `wind_volume`/`wind_direction` ranges are now **fully live-confirmed**
+  (`wind_volume`: 0=auto/1=min/5=max; `wind_direction`: 0=auto/1-5=fixed positions/6=swing).
+  Still open: temperature step (guessed `1.0°C`, not yet disambiguated from 0.5°C), and the
+  `hvac_mode` bucket table for the less common `operation_mode` values (SmellCare,
+  NanoexCleaning, AutoTempControl, etc. — still bucketed by best guess, not yet confirmed
+  against real device behavior; `KeepMode` specifically *is* now confirmed → `AUTO`).
 - **Update, 2026-09-22 — unit test suite written and green on the laptop.** Reversed the
   earlier "don't install the harness on this laptop" call from last session: a local
   `.venv/` (gitignored) with `pytest-homeassistant-custom-component` (pulls in
@@ -227,13 +228,113 @@ this repo as a design doc if that plan file isn't available in a future session)
     PHASE1_PLAN.md's testing plan treats that as covered by the manual smoke test (§5) on
     europa instead, not as an automated unit test; only the flow's pure
     `_extract_authorization_code` parser is unit-tested here.
-- **Next step**: on europa, run the manual smoke test — symlink `custom_components/eolia`
-  into a real HA config (or reuse this repo's `.venv` setup for a throwaway `hass -c
-  ./config`), drive the actual config flow through the UI (same manual copy-paste PKCE
-  method), confirm the climate entity/select/sensors/switches all match the real app's
-  state 1:1, and do one deliberate real control action (e.g. fan speed) to validate the
-  provisional `wind_volume`/`wind_direction` ranges and temperature step called out in the
-  Phase 2 section below. See PHASE1_PLAN.md's "Testing plan" §5 for the intended structure.
+- **Update, 2026-09-23 — live feature walkthrough on europa via a new CLI tool, several
+  real findings, and real code integrated as a result.** This session ran on europa itself
+  (not the laptop), with the real physical unit available. Instead of jumping straight to
+  the HA config-flow UI, built `tools/eolia_cli.py` first — a standalone script that
+  imports `auth.py`/`api.py`/`models.py` directly (no reimplementation, so zero drift from
+  what HA actually runs) and drives `login`/`devices`/`status`/`set`/`customsettings`/
+  `set-double-temp` subcommands against the real cloud API without needing a running HA
+  instance at all. This was the right call: it let every feature get walked through and
+  cross-checked against the official app one at a time, far faster than iterating through
+  a full HA config flow would have, and surfaced several real findings before they could
+  become confusing bugs later:
+  - **New CLI-only environment fix**: a plain `aiohttp.ClientSession()` (not going through
+    HA's `aiohttp_client` helper) still defaults to aiodns/c-ares for DNS whenever aiodns is
+    importable, and c-ares doesn't get along with europa's `systemd-resolved` stub at
+    `127.0.0.53` (`DNSError: (5, 'DNS server does not implement requested operation')`,
+    unrelated to the pytest-side pycares thread issue from 2026-09-22). Fixed in
+    `tools/eolia_cli.py`'s `_new_session()` by forcing `aiohttp.resolver.ThreadedResolver`
+    explicitly. Also hit and fixed a version mismatch (`pycares` 5.0.1 paired with `aiodns`
+    3.2.0, which wants `pycares<5`) left over from the previous session's thread-leak
+    debugging — pinned `pycares==4.11.0` to match; `requirements-test.txt` doesn't pin
+    `pycares` directly since `aiodns==3.2.0`'s own dependency resolution handles it
+    correctly from a clean install, this was only an issue because of manual reinstalls.
+  - **New confirmed device behavior — a ~2 minute cross-client write lockout**: error code
+    `E-21291-01718` ("他の機器でエアコンが制御されました。2分間変更できません" — "controlled
+    by another device, cannot change for 2 minutes"). Confirmed live and repeatedly: the
+    official app fires a real write just from opening/closing a settings menu, even with
+    *zero* value change (Kevin explicitly confirmed this — "even without changing its
+    value, the app showed a modal 'writing settings'"), and that write locks out other
+    clients (including our own CLI) for ~2 minutes. Now mapped to a dedicated
+    `EoliaDeviceLockedError` in `exceptions.py`/`api.py`. **Real implication**: any HA
+    write could transiently fail with this if the official app or physical remote was
+    touched in the last 2 minutes — not a bug, just needs a "try again shortly" UX
+    treatment rather than a generic error (not yet wired into `coordinator.py`'s handling,
+    just the exception type exists).
+  - **`operation_mode=KeepMode` (the app's "double temperature setting") fully resolved
+    end-to-end.** The low/high range is **not** in `/status` at all (confirmed live before
+    a separate Claude session, working from the decompiled APK on a different machine,
+    found and documented the real location: `GET`/`PUT /devices/{id}/customsettings`,
+    `double_mode_temp: {status, high, low}` — see findings.md's "KeepMode / double
+    temperature setting" section, added in commit `3d76aa2`). This session then
+    live-confirmed the full round-trip including the **first-ever live PUT** to that
+    endpoint (never tried before): minimal field set works (`double_mode_temp` + `peak_cut`,
+    no `operation_token` needed in the request, same pattern as `/status`), and discovered
+    one more new error code, `E-21291-02009` ("temperature settings must be at least 5
+    degrees apart" — `high`/`low` need a ≥5°C gap). **Kevin explicitly asked to integrate
+    this now rather than defer it**, so it's real code, not just findings: `models.py` gained
+    `EoliaCustomSettings`/`EoliaDoubleModeTemp`, `api.py` gained
+    `async_get_custom_settings`/`async_set_custom_settings`, `coordinator.py` polls it
+    alongside `/status` each cycle (non-fatal on failure — capability gating for this
+    resource across devices isn't confirmed) and gained `async_set_custom_settings()`
+    mirroring `async_set_status()`'s read-modify-write contract, and there's a new
+    `number.py` platform (`number.eolia_double_temp_low`/`_high`) plus a new
+    `EoliaDoubleTempEnabledSwitch` in `switch.py`. New observation worth knowing: the
+    range resets to `{status: false, high: 0, low: 0}` once the unit leaves `KeepMode` —
+    it isn't preserved for next time.
+  - **`air_flow` (quiet/powerful/long) and `wind_shield_hit` (shield/hit) — both fully
+    live-confirmed** against the app (all non-default values individually verified) and now
+    exposed as real entities: `select.py` was generalized from a single hardcoded
+    `EoliaAiModeSelect` class into a `SELECT_DESCRIPTIONS`-driven pattern (matching
+    `sensor.py`/`switch.py`'s existing style) covering `ai_mode` (unchanged behavior/
+    unique_id) plus the two new selects. Note from Kevin's own observation: `air_flow` is
+    independent of `wind_volume` (fan speed) — `long` noticeably increases air volume even
+    while `wind_volume` stays at `0`/auto, so they're not the same axis.
+  - **`wind_direction` (vertical louver) — full range resolved, including a subtle
+    two-layer state model.** Confirmed: `0`=auto, `1`-`5`=fixed positions (`1`="upper",
+    `3`≈"medium", `5`="straight down" — all app-confirmed), `6`=swing/oscillate (previously
+    not in the guessed `0-5` range at all — found by asking Kevin to physically test the
+    app's separate "left-right arrow" toggle, which turned out to be a swing on/off button,
+    not horizontal or auto as first guessed). Non-obvious behavior worth remembering: while
+    the app's vertical **auto** toggle is on, `/status` always reports `wind_direction=0`
+    regardless of what the API writes — the write isn't rejected or lost, it's just
+    invisible/inert until auto is turned off *in the app* (no API field found to toggle auto
+    itself). By contrast, a fixed-position write (`1`-`5`) sent via the API **does**
+    immediately override **swing** (`6`) — confirmed by writing `2` while the unit was
+    actively oscillating and watching it stop and move to position `2`. `const.py`'s
+    `PROVISIONAL_WIND_VOLUME_LEVELS`/`PROVISIONAL_WIND_DIRECTION_LEVELS` were renamed to
+    `WIND_VOLUME_LEVELS`/`WIND_DIRECTION_LEVELS` (dropping the "provisional" framing) with
+    the corrected `0-6` range for direction; `WIND_DIRECTION_SWING = 6` added as a named
+    constant. `ai_control` was also observed to drift on its own from
+    `comfortable_econavi` to `comfortable` mid-session with no write from either side
+    (Kevin confirmed he didn't touch it) — logged as an open question in
+    `tests/fixtures/live_captures/09`'s notes, not yet understood, but reinforces that the
+    coordinator's poll-and-trust-the-server design (rather than trusting "what we last set")
+    is the right call.
+  - **All of the above captured as real request/response pairs** in
+    `tests/fixtures/live_captures/01`-`16` (with a `README.md` index), each cross-checked
+    against the official app, several corrected in-place when Kevin's follow-up
+    observations overturned an earlier working theory (e.g. the device-lockout cause) —
+    worth reading through if picking this back up, since the notes capture *why* each
+    conclusion was reached, not just the final answer.
+  - **New tests added, suite still green (83 total, up from 61)**: `tests/test_models.py`
+    (`EoliaCustomSettings`/`EoliaDoubleModeTemp`), `tests/test_api.py`
+    (`customsettings` GET/PUT, `EoliaDeviceLockedError`/`E-21291-02009` mapping),
+    `tests/test_coordinator.py` (customsettings polling is non-fatal on failure,
+    `async_set_custom_settings`'s read-modify-write contract and listener notification),
+    new `tests/test_select.py` and `tests/test_number.py`, plus `test_climate.py` gained
+    checks for `KeepMode`'s bucket and the corrected 0-6 swing range. New fixture:
+    `tests/fixtures/customsettings_response.json`.
+- **Next step**: the actual HA config-flow/entity-registration smoke test (§5 of
+  PHASE1_PLAN.md's testing plan) is still the one thing not yet done — everything above was
+  validated through the CLI tool and direct API calls, not through a real running Home
+  Assistant instance. Symlink (or copy) `custom_components/eolia` into a real HA config,
+  drive the config flow through the actual UI (same manual copy-paste PKCE method), and
+  confirm every entity — climate, all 3 selects, both numbers, all 4 switches, all 5
+  sensors — matches the real app's state 1:1, including the newly-added ones from today.
+  Also still open: the temperature step (0.5 vs 1.0°C) and the remaining unconfirmed
+  `hvac_mode` bucket entries noted above.
 
 ## How to leave notes for next time
 

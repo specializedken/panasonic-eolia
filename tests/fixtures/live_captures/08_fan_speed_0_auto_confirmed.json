@@ -1,0 +1,27 @@
+{
+  "description": "wind_volume=0 visually confirmed in the app as 'Auto' fan speed -- closes out the provisional guess in const.py's PROVISIONAL_WIND_VOLUME_LEVELS comment (previously only inferred from the server accepting 0 without error, not actually seen in the app UI).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": null,
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "comfortable_econavi",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 24.5,
+    "inside_humidity": 70,
+    "outside_temp": 21.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows fan speed as 'Auto' while wind_volume=0.",
+  "notes": [
+    "CONFIRMED: wind_volume=0 -> Auto in the app. Next: cycle wind_volume=1..5 (each pending app confirmation) to map the remaining numbered levels."
+  ]
+}

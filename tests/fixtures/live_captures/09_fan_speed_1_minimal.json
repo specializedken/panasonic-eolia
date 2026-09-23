@@ -1,0 +1,43 @@
+{
+  "description": "wind_volume=1, confirmed in the app as the minimal/lowest fan speed. Also surfaced an unrequested state drift: ai_control silently changed from comfortable_econavi to comfortable, which Kevin confirms he did not do himself.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable_econavi",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 0,
+    "wind_volume": 1,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "comfortable",
+    "temperature": 24.0,
+    "wind_volume": 1,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 22.5,
+    "inside_humidity": 70,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows fan speed as 'Minimal' (lowest) at wind_volume=1.",
+  "notes": [
+    "CONFIRMED: wind_volume=1 -> app's lowest/'minimal' fan speed label.",
+    "ANOMALY: request sent ai_control='comfortable_econavi' (carried over from cached state, unmodified by this call) but the response came back with ai_control='comfortable' instead. Kevin explicitly confirmed he did not change AI mode in the app around this time. Two possibilities: (a) ECONAVI silently reverts to plain AI-comfort mode under some server/firmware-side condition (e.g. a sensor precondition not currently met, or a timeout on ECONAVI specifically) -- most likely, given nothing else changed; (b) something else server-side (unrelated write from another session/token?) touched it, less likely given no other client activity was reported. Needs more observation: worth checking whether ai_control keeps reading back as 'comfortable' on later polls too, or if it's just this one response.",
+    "Real implication for the HA integration: the select.eolia_ai_mode entity's state can apparently drift independent of any write HA itself made, purely from server/firmware-side behavior -- not a bug in our code, but confirms the coordinator's poll-and-refresh-from-server design (rather than caching what we last set) is the right call, since 'the value I set' and 'the value that's actually active' can diverge here."
+  ]
+}

@@ -26,8 +26,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import EoliaConfigEntry
 from .const import (
     PROVISIONAL_TEMPERATURE_STEP,
-    PROVISIONAL_WIND_DIRECTION_LEVELS,
-    PROVISIONAL_WIND_VOLUME_LEVELS,
+    WIND_DIRECTION_LEVELS,
+    WIND_VOLUME_LEVELS,
     EoliaOperationMode,
     EoliaWindDirectionHorizon,
 )
@@ -80,8 +80,8 @@ _SETTABLE_PRESET_MODES = [
 ]
 
 _SWING_HORIZONTAL_MODES = [mode.value for mode in EoliaWindDirectionHorizon]
-_FAN_MODES = [str(level) for level in PROVISIONAL_WIND_VOLUME_LEVELS]
-_SWING_MODES = [str(level) for level in PROVISIONAL_WIND_DIRECTION_LEVELS]
+_FAN_MODES = [str(level) for level in WIND_VOLUME_LEVELS]
+_SWING_MODES = [str(level) for level in WIND_DIRECTION_LEVELS]
 
 
 async def async_setup_entry(

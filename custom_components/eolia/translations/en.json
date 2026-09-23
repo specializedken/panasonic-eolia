@@ -43,6 +43,23 @@
           "comfortable": "AI comfort",
           "comfortable_econavi": "AI comfort + ECONAVI"
         }
+      },
+      "air_flow": {
+        "name": "Airflow mode",
+        "state": {
+          "not_set": "Normal",
+          "quiet": "Quiet",
+          "powerful": "Powerful",
+          "long": "Long reach"
+        }
+      },
+      "wind_shield_hit": {
+        "name": "Airflow targeting",
+        "state": {
+          "not_set": "Normal",
+          "shield": "Avoid people",
+          "hit": "Aim at people"
+        }
       }
     },
     "sensor": {
@@ -55,7 +72,12 @@
     "switch": {
       "nanoex": { "name": "nanoeX" },
       "air_quality_monitor": { "name": "Air quality monitoring" },
-      "silence_control": { "name": "Quiet mode" }
+      "silence_control": { "name": "Quiet mode" },
+      "double_temp_enabled": { "name": "Double temperature setting" }
+    },
+    "number": {
+      "double_temp_low": { "name": "Double temperature: low" },
+      "double_temp_high": { "name": "Double temperature: high" }
     }
   }
 }

@@ -1,0 +1,17 @@
+{
+  "description": "Full live mapping of wind_direction (vertical louver), resolving the earlier silent-no-op mystery from step where wind_direction=1 appeared to have no effect.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": null,
+  "response": null,
+  "app_confirmed": "Full sequence confirmed live against the app across several steps in this session, including the final check: writing wind_direction=2 directly while the unit was actively in swing (6) immediately stopped the oscillation and moved to a fixed '2' position -- confirms a fixed-position write CAN override swing from the API, even though it could NOT override 'auto' (0) the same way (auto could only be toggled off from the app itself).",
+  "notes": [
+    "RESOLVED: wind_direction has TWO independent axes that both surface through the same integer field: (1) auto vs. fixed vs. swing MODE, and (2) which fixed position when in fixed mode. Confirmed values:",
+    "  0 = Auto (app's vertical 'auto' toggle ON -- app shows no manual position controls while this is active).",
+    "  1 = fixed position, app-confirmed as 'upper' (highest angle).",
+    "  3 = fixed position, app-confirmed as roughly 'medium'.",
+    "  5 = fixed position, app-confirmed as 'straight down' (lowest angle) -- so 1-5 is a real, confirmed 5-level fixed-position scale from upper to straight-down.",
+    "  6 = Swing/oscillate (app's separate 'left-right arrow' toggle -- turned out to be a swing on/off toggle, not horizontal or auto -- turning it on makes the physical louver continuously oscillate up/down). This was NOT part of the original PROVISIONAL_WIND_VOLUME_LEVELS/PROVISIONAL_WIND_DIRECTION_LEVELS 0-5 guess in const.py and needs adding.",
+    "Earlier apparent bug (set wind_direction=1 via the API had no visible effect) is now explained: the app's vertical 'auto' toggle was ON at that time (entered via the KeepMode/double-temperature app interaction, which resets wind_direction to 0/auto as a side effect -- see 07_keepmode_double_temperature.json's notes). While auto is active app-side, /status always reports wind_direction=0 regardless of what discrete value is sent via the API -- the API write is NOT rejected and NOT lost (later setting swing=3 immediately after auto had been manually turned off in the app worked instantly), but its effect stays invisible/inert until auto is turned off. This means: our API can write a fixed position at any time, but cannot itself toggle auto off/on or swing off/on -- no separate boolean field for either has been found; sending a fixed position (1-5) or swing (6) directly might implicitly toggle mode too, untested (worth trying: send wind_direction=2 directly while currently in swing/6 mode, see if it silently switches out of swing like it silently ignored writes during auto).",
+    "const.py's PROVISIONAL_WIND_DIRECTION_LEVELS = (0,1,2,3,4,5) needs correcting to (0,1,2,3,4,5,6) with 6=swing, and the 'provisional' framing can be dropped now that 0,1,3,5,6 are all live-confirmed (2 and 4 weren't individually tested but fit the obvious linear pattern between confirmed neighbors)."
+  ]
+}

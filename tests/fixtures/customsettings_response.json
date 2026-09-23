@@ -1,0 +1,10 @@
+{
+  "peak_cut": 100,
+  "double_mode_temp": {
+    "status": true,
+    "high": 28,
+    "low": 23
+  },
+  "operation_priority": false,
+  "device_errstatus": false
+}

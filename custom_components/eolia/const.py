@@ -100,29 +100,43 @@ class EoliaWindDirectionHorizon(StrEnum):
 
 
 # --- air_flow enum (wire values) ----------------------------------------------------------
+# All 4 values live-confirmed against the app 2026-09-23 (see
+# tests/fixtures/live_captures/10-12). Independent of wind_volume (fan speed) -- both can
+# be set at the same time, air_flow is a character/boost mode layered on top.
 class EoliaAirFlow(StrEnum):
-    """Wire values of the `air_flow` field (quiet/powerful/nanoeX-long)."""
+    """Wire values of the `air_flow` field."""
 
     NOT_SET = "not_set"
     QUIET = "quiet"
     POWERFUL = "powerful"
-    LONG = "long"
+    LONG = "long"  # extended-reach airflow, noticeably more air volume (nanoeX-long)
 
 
 # --- wind_shield_hit enum (wire values) ---------------------------------------------------
+# Both non-default values live-confirmed against the app 2026-09-23 (see
+# tests/fixtures/live_captures/13-14). Human-detection based airflow avoidance/targeting.
 class EoliaWindShieldHit(StrEnum):
     """Wire values of the `wind_shield_hit` field."""
 
     NOT_SET = "not_set"
-    SHIELD = "shield"
-    HIT = "hit"
+    SHIELD = "shield"  # avoid blowing directly at detected people
+    HIT = "hit"  # deliberately blow at detected people
 
 
 # --- Known Eolia error codes ---------------------------------------------------------------
-# Only these two have been observed and diagnosed live -- see findings.md. Everything
-# else should be logged verbatim rather than guessed at.
+# See findings.md for detail. Everything else should be logged verbatim rather than
+# guessed at.
 ERROR_CODE_CLOCK_SKEW = "E-21291-00002"
 ERROR_CODE_GENERIC_APPLICATION_ERROR = "E-21291-00007"
+# Temperature out of valid range for the target operation_mode (observed with
+# temperature=0.0 carried over from a Stop-mode status into an active-mode write).
+ERROR_CODE_TEMPERATURE_OUT_OF_RANGE = "E-21291-01712"
+# Another client wrote to the device within the last ~2 minutes -- confirmed live to be
+# triggered by the official app (even a no-op write on menu close, not just an actual
+# value change). See tests/fixtures/live_captures/02's notes.
+ERROR_CODE_DEVICE_LOCKED = "E-21291-01718"
+# double_mode_temp.high/low must be at least 5 degrees apart.
+ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW = "E-21291-02009"
 
 # --- Fixed control-request payload contract -------------------------------------------------
 # Confirmed live 2026-09-23 by capturing a real PUT from the actual Eolia app: the body
@@ -144,13 +158,38 @@ CONTROL_REQUEST_FIELDS = (
     "wind_shield_hit",
 )
 
-# wind_volume (fan speed) / wind_direction (vertical louver) level ranges are NOT
-# confirmed anywhere in findings.md -- only that they are ints, and 3/3 was observed in
-# the one live capture. This is a provisional guess; validate against the real app during
-# the manual smoke test and correct findings.md + this constant if wrong.
-PROVISIONAL_WIND_VOLUME_LEVELS = (0, 1, 2, 3, 4, 5)  # 0 = auto
-PROVISIONAL_WIND_DIRECTION_LEVELS = (0, 1, 2, 3, 4, 5)  # 0 = auto
+# wind_volume (fan speed): live-confirmed 2026-09-23 against the app -- 0=auto, 1=lowest
+# ("minimal"), 5=highest ("max"). 2-4 weren't individually confirmed but fit the obvious
+# linear pattern between confirmed neighbors. See tests/fixtures/live_captures/08-09.
+WIND_VOLUME_LEVELS = (0, 1, 2, 3, 4, 5)  # 0 = auto
+
+# wind_direction (vertical louver): live-confirmed 2026-09-23. Two independent axes ride
+# on the same integer: 0=auto (server-side "auto" toggle in the app; while that toggle is
+# on app-side, /status always reports 0 regardless of what value the API last wrote --
+# the write isn't rejected or lost, it's just invisible/inert until auto is turned off in
+# the app; no API field to toggle auto itself has been found), 1-5=fixed positions from
+# "upper" to "straight down" (1, 3, and 5 individually confirmed; 2 and 4 inferred by
+# pattern -- and confirmed as GOOD inferred values, since writing 2 directly worked and
+# was confirmed in the app), 6=swing/oscillate (this one is NOT part of a linear position
+# scale -- it's a distinct continuous-motion mode, but unlike auto, a fixed-position write
+# (1-5) DOES immediately override it via the API alone). See
+# tests/fixtures/live_captures/07 and 15 for the full investigation.
+WIND_DIRECTION_LEVELS = (0, 1, 2, 3, 4, 5, 6)
+WIND_DIRECTION_SWING = 6
 
 # Temperature step is unconfirmed (the single live capture, 20.0, doesn't disambiguate
 # 0.5 vs 1.0 steps). Default to whole degrees; validate on first live control test.
 PROVISIONAL_TEMPERATURE_STEP = 1.0
+
+# --- KeepMode ("double temperature setting") -- /customsettings -----------------------
+# Separate resource from /status -- see findings.md's "KeepMode / double temperature
+# setting" section. appliance_id is excluded from the PUT body the same way as /status
+# (id only in the URL); unlike /status, this resource's GET response has no appliance_id
+# field at all.
+CUSTOM_SETTINGS_REQUEST_FIELDS = ("double_mode_temp", "peak_cut")
+
+# App-enforced bounds (MyAirconSettingActivity.X() falls back to the last-known value
+# outside these ranges) -- not yet confirmed as server-enforced, just what the app itself
+# allows the user to pick. See findings.md.
+DOUBLE_MODE_TEMP_HIGH_RANGE = (21, 30)
+DOUBLE_MODE_TEMP_LOW_RANGE = (16, 25)

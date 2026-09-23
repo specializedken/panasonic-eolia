@@ -23,7 +23,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import EoliaApiClient
 from .const import DEFAULT_SCAN_INTERVAL_SECONDS, DOMAIN
 from .exceptions import EoliaApiError, EoliaAuthError, EoliaClockSkewError, EoliaNetworkError
-from .models import EoliaDevice, EoliaStatus
+from .models import EoliaCustomSettings, EoliaDevice, EoliaStatus
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,12 +51,34 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # findings.md) -- this is the only source of truth for its "current" value, and
         # it can go stale if changed via the physical remote or the real app.
         self._silence_control_cache: dict[str, bool] = {}
+        # KeepMode's double-temperature range lives on a separate resource
+        # (.../customsettings, not /status -- see findings.md and
+        # tests/fixtures/live_captures/07). Not part of `self.data` (which
+        # DataUpdateCoordinator's own change-notification machinery is keyed on) -- kept
+        # as a side-channel dict instead, same pattern as _silence_control_cache. A fetch
+        # failure here is non-fatal (logged, cached value kept) since capability gating
+        # for this resource isn't confirmed across devices; the main status poll already
+        # covers auth/clock-skew failures.
+        self.custom_settings: dict[str, EoliaCustomSettings] = {}
 
     async def _async_update_data(self) -> dict[str, EoliaStatus]:
         statuses: dict[str, EoliaStatus] = {}
         for appliance_id in self.devices:
             statuses[appliance_id] = await self._async_get_status(appliance_id)
+            await self._async_refresh_custom_settings(appliance_id)
         return statuses
+
+    async def _async_refresh_custom_settings(self, appliance_id: str) -> None:
+        try:
+            self.custom_settings[appliance_id] = await self.api.async_get_custom_settings(
+                appliance_id
+            )
+        except (EoliaApiError, EoliaAuthError) as err:
+            _LOGGER.debug(
+                "Failed to fetch customsettings for %s, keeping last-known value: %s",
+                appliance_id,
+                err,
+            )
 
     async def _async_get_status(self, appliance_id: str) -> EoliaStatus:
         try:
@@ -116,3 +138,36 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         updated = dict(self.data or {})
         updated[appliance_id] = new_status
         self.async_set_updated_data(updated)
+
+    async def async_set_custom_settings(self, appliance_id: str, **changes: Any) -> None:
+        """Apply `changes` on top of the last-known .../customsettings and PUT the result.
+
+        `changes` keys are `double_mode_temp_status`/`double_mode_temp_high`/
+        `double_mode_temp_low` (flattened for caller convenience -- the wire format nests
+        these three under a `double_mode_temp` object) or `peak_cut`. Same single-attempt,
+        no-auto-retry contract as async_set_status().
+        """
+        current = self.custom_settings.get(appliance_id)
+        if current is None:
+            current = await self.api.async_get_custom_settings(appliance_id)
+
+        payload = current.to_control_fields()
+        double_mode_temp = dict(payload["double_mode_temp"])
+        if "double_mode_temp_status" in changes:
+            double_mode_temp["status"] = changes.pop("double_mode_temp_status")
+        if "double_mode_temp_high" in changes:
+            double_mode_temp["high"] = changes.pop("double_mode_temp_high")
+        if "double_mode_temp_low" in changes:
+            double_mode_temp["low"] = changes.pop("double_mode_temp_low")
+        payload["double_mode_temp"] = double_mode_temp
+        payload.update(changes)  # e.g. peak_cut, if ever needed
+
+        try:
+            new_settings = await self.api.async_set_custom_settings(appliance_id, payload)
+        except (EoliaApiError, EoliaAuthError) as err:
+            raise HomeAssistantError(
+                f"Failed to update Eolia device's double-temperature settings: {err}"
+            ) from err
+
+        self.custom_settings[appliance_id] = new_settings
+        self.async_update_listeners()

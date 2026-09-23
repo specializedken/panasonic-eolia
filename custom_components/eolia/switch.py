@@ -20,6 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import EoliaConfigEntry
 from .coordinator import EoliaDataUpdateCoordinator
 from .entity import EoliaEntity
+from .models import EoliaCustomSettings
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -65,11 +66,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up switch entities for every device on the account."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities(
+    entities: list[SwitchEntity] = [
         EoliaSwitch(coordinator, appliance_id, description)
         for appliance_id in coordinator.devices
         for description in SWITCH_DESCRIPTIONS
+    ]
+    entities.extend(
+        EoliaDoubleTempEnabledSwitch(coordinator, appliance_id)
+        for appliance_id in coordinator.devices
     )
+    async_add_entities(entities)
 
 
 class EoliaSwitch(EoliaEntity, SwitchEntity):
@@ -101,4 +107,46 @@ class EoliaSwitch(EoliaEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.coordinator.async_set_status(
             self._appliance_id, **{self.entity_description.control_field: False}
+        )
+
+
+class EoliaDoubleTempEnabledSwitch(EoliaEntity, SwitchEntity):
+    """Toggles KeepMode's double_mode_temp.status -- a separate resource from /status.
+
+    Not built on EoliaSwitchEntityDescription's generic pattern above since it's backed by
+    EoliaCustomSettings (.../customsettings), not EoliaStatus (/status), and writes through
+    coordinator.async_set_custom_settings() instead of async_set_status(). See
+    findings.md's "KeepMode / double temperature setting" section.
+    """
+
+    _attr_translation_key = "double_temp_enabled"
+
+    def __init__(
+        self, coordinator: EoliaDataUpdateCoordinator, appliance_id: str
+    ) -> None:
+        super().__init__(coordinator, appliance_id)
+        self._attr_unique_id = f"{appliance_id}_double_temp_enabled"
+
+    @property
+    def _custom_settings(self) -> EoliaCustomSettings | None:
+        return self.coordinator.custom_settings.get(self._appliance_id)
+
+    @property
+    def available(self) -> bool:
+        """Unavailable if the coordinator failed, or customsettings hasn't loaded yet."""
+        return self.coordinator.last_update_success and self._custom_settings is not None
+
+    @property
+    def is_on(self) -> bool | None:
+        settings = self._custom_settings
+        return settings.double_mode_temp.status if settings else None
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.coordinator.async_set_custom_settings(
+            self._appliance_id, double_mode_temp_status=True
+        )
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.coordinator.async_set_custom_settings(
+            self._appliance_id, double_mode_temp_status=False
         )

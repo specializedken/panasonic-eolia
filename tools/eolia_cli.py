@@ -56,7 +56,7 @@ from custom_components.eolia.const import (  # noqa: E402
     CONF_REFRESH_TOKEN,
 )
 from custom_components.eolia.exceptions import EoliaApiError, EoliaAuthError  # noqa: E402
-from custom_components.eolia.models import EoliaStatus  # noqa: E402
+from custom_components.eolia.models import EoliaCustomSettings, EoliaStatus  # noqa: E402
 
 TOKENS_FILE = REPO_ROOT / ".eolia_tokens.json"
 
@@ -227,6 +227,10 @@ async def cmd_set(args: argparse.Namespace) -> None:
             payload["nanoex"] = args.nanoex
         if args.airquality is not None:
             payload["airquality"] = args.airquality
+        if args.air_flow is not None:
+            payload["air_flow"] = args.air_flow
+        if args.wind_shield_hit is not None:
+            payload["wind_shield_hit"] = args.wind_shield_hit
 
         print("About to send this control write to the real device:")
         print(json.dumps(payload, indent=2))
@@ -239,6 +243,59 @@ async def cmd_set(args: argparse.Namespace) -> None:
         new_status = await api.async_set_status(appliance_id, payload)
         print("\nNew status:")
         print(json.dumps(_status_dict(new_status), indent=2))
+
+
+def _custom_settings_dict(settings: EoliaCustomSettings) -> dict[str, Any]:
+    return {
+        "double_mode_temp": settings.double_mode_temp.to_dict(),
+        "peak_cut": settings.peak_cut,
+        "operation_priority": settings.operation_priority,
+        "device_errstatus": settings.device_errstatus,
+        "operation_token": (
+            f"<redacted, len={len(settings.operation_token)}>"
+            if settings.operation_token
+            else None
+        ),
+    }
+
+
+async def cmd_customsettings(args: argparse.Namespace) -> None:
+    async with _new_session() as session:
+        auth = await _make_auth(session)
+        api = EoliaApiClient(session, auth)
+        appliance_id = await _resolve_appliance_id(api, args.appliance_id)
+        settings = await api.async_get_custom_settings(appliance_id)
+        print(json.dumps(_custom_settings_dict(settings), indent=2))
+
+
+async def cmd_set_double_temp(args: argparse.Namespace) -> None:
+    async with _new_session() as session:
+        auth = await _make_auth(session)
+        api = EoliaApiClient(session, auth)
+        appliance_id = await _resolve_appliance_id(api, args.appliance_id)
+
+        current = await api.async_get_custom_settings(appliance_id)
+        payload = current.to_control_fields()
+        double_mode_temp = dict(payload["double_mode_temp"])
+        if args.status is not None:
+            double_mode_temp["status"] = args.status
+        if args.high is not None:
+            double_mode_temp["high"] = args.high
+        if args.low is not None:
+            double_mode_temp["low"] = args.low
+        payload["double_mode_temp"] = double_mode_temp
+
+        print("About to send this control write to the real device:")
+        print(json.dumps(payload, indent=2))
+        if not args.yes:
+            confirm = input("\nProceed? [y/N] ").strip().lower()
+            if confirm != "y":
+                print("Aborted.")
+                return
+
+        new_settings = await api.async_set_custom_settings(appliance_id, payload)
+        print("\nNew custom settings:")
+        print(json.dumps(_custom_settings_dict(new_settings), indent=2))
 
 
 def _bool_arg(value: str) -> bool:
@@ -274,7 +331,31 @@ def build_parser() -> argparse.ArgumentParser:
     p_set.add_argument("--nanoex", type=_bool_arg)
     p_set.add_argument("--airquality", type=_bool_arg)
     p_set.add_argument("--silence", type=_bool_arg)
+    p_set.add_argument(
+        "--air-flow", dest="air_flow", help="air_flow: not_set/quiet/powerful/long"
+    )
+    p_set.add_argument(
+        "--wind-shield-hit",
+        dest="wind_shield_hit",
+        help="wind_shield_hit: not_set/shield/hit",
+    )
     p_set.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompt")
+
+    p_custom = sub.add_parser(
+        "customsettings", help="GET KeepMode's double-temperature range (and peak_cut)"
+    )
+    p_custom.add_argument("appliance_id", nargs="?", default=None)
+
+    p_double = sub.add_parser(
+        "set-double-temp", help="Read-modify-write KeepMode's double_mode_temp range"
+    )
+    p_double.add_argument("appliance_id", nargs="?", default=None)
+    p_double.add_argument("--status", type=_bool_arg, help="double_mode_temp.status")
+    p_double.add_argument("--high", type=int, help="double_mode_temp.high (app allows 21-30)")
+    p_double.add_argument("--low", type=int, help="double_mode_temp.low (app allows 16-25)")
+    p_double.add_argument(
+        "-y", "--yes", action="store_true", help="Skip confirmation prompt"
+    )
 
     return parser
 
@@ -288,6 +369,8 @@ async def _async_main() -> None:
         "devices": cmd_devices,
         "status": cmd_status,
         "set": cmd_set,
+        "customsettings": cmd_customsettings,
+        "set-double-temp": cmd_set_double_temp,
     }
     try:
         await handlers[args.command](args)

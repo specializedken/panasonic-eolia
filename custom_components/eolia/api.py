@@ -20,9 +20,15 @@ from .const import (
     EOLIA_DATE_FORMAT,
     EOLIA_DATE_TIMEZONE,
     ERROR_CODE_CLOCK_SKEW,
+    ERROR_CODE_DEVICE_LOCKED,
 )
-from .exceptions import EoliaApiError, EoliaClockSkewError, EoliaNetworkError
-from .models import EoliaDevice, EoliaStatus
+from .exceptions import (
+    EoliaApiError,
+    EoliaClockSkewError,
+    EoliaDeviceLockedError,
+    EoliaNetworkError,
+)
+from .models import EoliaCustomSettings, EoliaDevice, EoliaStatus
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,9 +65,32 @@ class EoliaApiClient:
         )
         return EoliaStatus.from_dict(data)
 
+    async def async_get_custom_settings(self, appliance_id: str) -> EoliaCustomSettings:
+        """GET /devices/{appliance_id}/customsettings -- KeepMode's double-temp range."""
+        data = await self._async_request("GET", self._custom_settings_path(appliance_id))
+        return EoliaCustomSettings.from_dict(data)
+
+    async def async_set_custom_settings(
+        self, appliance_id: str, payload: dict[str, Any]
+    ) -> EoliaCustomSettings:
+        """PUT /devices/{appliance_id}/customsettings.
+
+        `payload` must already be the exact fixed field set from
+        EoliaCustomSettings.to_control_fields() plus any overrides -- same
+        read-modify-write contract as async_set_status(), owned by coordinator.py.
+        """
+        data = await self._async_request(
+            "PUT", self._custom_settings_path(appliance_id), json_body=payload
+        )
+        return EoliaCustomSettings.from_dict(data)
+
     @staticmethod
     def _status_path(appliance_id: str) -> str:
         return f"/devices/{quote(appliance_id, safe='')}/status"
+
+    @staticmethod
+    def _custom_settings_path(appliance_id: str) -> str:
+        return f"/devices/{quote(appliance_id, safe='')}/customsettings"
 
     @staticmethod
     def _headers(access_token: str) -> dict[str, str]:
@@ -107,15 +136,16 @@ class EoliaApiClient:
                 if resp.status >= 400:
                     code = body.get("code")
                     message = body.get("message", "")
+                    _KNOWN_CODES = (ERROR_CODE_CLOCK_SKEW, ERROR_CODE_DEVICE_LOCKED)
                     if code is None:
                         _LOGGER.warning(
                             "Eolia API error with no recognizable code: status=%s body=%s",
                             resp.status,
                             body,
                         )
-                    elif code not in (ERROR_CODE_CLOCK_SKEW,):
-                        # Only two codes are documented in findings.md so far -- log
-                        # anything else verbatim so it can be folded back in later.
+                    elif code not in _KNOWN_CODES:
+                        # Log anything not specially handled below verbatim so it can be
+                        # folded back into findings.md/const.py later.
                         _LOGGER.debug(
                             "Eolia API error code=%s message=%s (undocumented code, "
                             "consider adding to findings.md)",
@@ -124,6 +154,8 @@ class EoliaApiClient:
                         )
                     if code == ERROR_CODE_CLOCK_SKEW:
                         raise EoliaClockSkewError(resp.status, code, message)
+                    if code == ERROR_CODE_DEVICE_LOCKED:
+                        raise EoliaDeviceLockedError(resp.status, code, message)
                     raise EoliaApiError(resp.status, code, message)
 
                 return body

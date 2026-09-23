@@ -1,0 +1,29 @@
+{
+  "description": "First-ever live PUT to .../customsettings, via tools/eolia_cli.py's new set-double-temp command. A no-op echo (same values back) succeeded first (not saved as a separate fixture); a high=27 attempt was then rejected by a new error code (E-21291-02009, min 5-degree gap); this capture is the first real value change: low changed 23 -> 22 (gap now 6, satisfying the rule).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "double_mode_temp": {
+      "status": true,
+      "high": 28,
+      "low": 22
+    },
+    "peak_cut": 100
+  },
+  "response": {
+    "double_mode_temp": {
+      "status": true,
+      "high": 28,
+      "low": 22
+    },
+    "peak_cut": 100,
+    "operation_priority": false,
+    "device_errstatus": false,
+    "operation_token": "<redacted, len=16>"
+  },
+  "app_confirmed": "App shows 22-28C for the double-temperature range.",
+  "notes": [
+    "CONFIRMED: .../customsettings PUT works with the minimal field set (double_mode_temp + peak_cut only, no operation_token needed in the request -- same pattern as /status). The response DOES include operation_token (redacted here), confirming it's PUT-response-only, never present on GET -- exactly mirroring EoliaStatus's own operation_token field.",
+    "Two new error codes discovered via this endpoint: E-21291-01712 was NOT seen here (that one is /status-specific, temperature-out-of-range for an active operation_mode); this endpoint's own validation error is E-21291-02009 ('temperature settings must be at least 5 degrees apart'), seen when attempting high=27 with low still at 23 (gap of only 4).",
+    "This finding is what custom_components/eolia/api.py's async_get_custom_settings/async_set_custom_settings, models.py's EoliaCustomSettings/EoliaDoubleModeTemp, coordinator.py's async_set_custom_settings, number.py, and the double_temp_enabled switch in switch.py are all built from."
+  ]
+}

@@ -16,8 +16,9 @@ from custom_components.eolia.climate import (
     _DEFAULT_MODE_FOR_HVAC_MODE,
     _HVAC_MODE_BUCKETS,
     _SETTABLE_PRESET_MODES,
+    _SWING_MODES,
 )
-from custom_components.eolia.const import EoliaOperationMode
+from custom_components.eolia.const import WIND_DIRECTION_SWING, EoliaOperationMode
 
 @pytest.mark.parametrize("mode", list(EoliaOperationMode))
 def test_every_operation_mode_is_bucketed_except_other(mode):
@@ -80,3 +81,16 @@ def test_dry_vs_cool_and_dehumidify_are_distinct_preset_modes():
     assert (
         _HVAC_MODE_BUCKETS[EoliaOperationMode.COOL_DEHUMIDIFYING] == HVACMode.COOL
     )
+
+
+def test_keepmode_maps_to_auto_bucket():
+    """operation_mode=KeepMode is the app's 'double temperature setting' -- live
+    confirmed 2026-09-23 (see tests/fixtures/live_captures/07)."""
+    assert _HVAC_MODE_BUCKETS[EoliaOperationMode.KEEP_MODE] == HVACMode.AUTO
+
+
+def test_swing_modes_include_the_confirmed_full_range():
+    # wind_direction's full range live-confirmed 2026-09-23 (see
+    # tests/fixtures/live_captures/15): 0=auto, 1-5=fixed positions, 6=swing.
+    assert _SWING_MODES == ["0", "1", "2", "3", "4", "5", "6"]
+    assert str(WIND_DIRECTION_SWING) in _SWING_MODES

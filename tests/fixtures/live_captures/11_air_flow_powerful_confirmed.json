@@ -1,0 +1,41 @@
+{
+  "description": "air_flow=powerful, visually confirmed in the app as the 'powerful' wind mode setting.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable",
+    "air_flow": "powerful",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 0,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "comfortable",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "powerful",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 21.0,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows wind mode 'powerful' at air_flow=powerful.",
+  "notes": [
+    "CONFIRMED: EoliaAirFlow.POWERFUL wire value round-trips correctly. Next: long (nanoeX-long), then wind_shield_hit's shield/hit, each pending app confirmation."
+  ]
+}

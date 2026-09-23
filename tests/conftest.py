@@ -86,3 +86,9 @@ def control_response() -> dict:
 def devices_response() -> dict:
     """Real GET /devices body (2026-09-23 capture)."""
     return _load_fixture("devices_response.json")
+
+
+@pytest.fixture
+def customsettings_response() -> dict:
+    """Real GET .../customsettings body (2026-09-23 capture, no operation_token -- GET-only)."""
+    return _load_fixture("customsettings_response.json")

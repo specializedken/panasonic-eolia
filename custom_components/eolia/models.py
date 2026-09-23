@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Self
 
-from .const import CONTROL_REQUEST_FIELDS
+from .const import CONTROL_REQUEST_FIELDS, CUSTOM_SETTINGS_REQUEST_FIELDS
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -121,6 +121,68 @@ class EoliaStatus:
         }
         # Defensive: keep this in sync with CONTROL_REQUEST_FIELDS minus silence_control.
         assert set(payload) == set(CONTROL_REQUEST_FIELDS) - {"silence_control"}
+        return payload
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EoliaDoubleModeTemp:
+    """The `double_mode_temp` sub-object of a .../customsettings response."""
+
+    status: bool
+    high: int
+    low: int
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            status=bool(data.get("status", False)),
+            high=int(data.get("high", 28)),
+            low=int(data.get("low", 23)),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"status": self.status, "high": self.high, "low": self.low}
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EoliaCustomSettings:
+    """Parsed GET/PUT .../customsettings response.
+
+    A separate resource from EoliaStatus -- KeepMode's low/high range lives here, not in
+    /status (confirmed live 2026-09-23, see findings.md). Unlike EoliaStatus, the GET
+    response has no `appliance_id` field at all, so this model doesn't carry one either;
+    the coordinator keys it by appliance_id externally, same as it does for silence_control.
+    """
+
+    double_mode_temp: EoliaDoubleModeTemp
+    peak_cut: int
+
+    # Read-only / informational fields -- not sent back on control writes.
+    operation_priority: bool | None
+    device_errstatus: bool | None
+    operation_token: str | None  # only present on PUT responses, not GET (same as EoliaStatus)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            double_mode_temp=EoliaDoubleModeTemp.from_dict(data.get("double_mode_temp", {})),
+            peak_cut=int(data.get("peak_cut", 100)),
+            operation_priority=data.get("operation_priority"),
+            device_errstatus=data.get("device_errstatus"),
+            operation_token=data.get("operation_token"),
+        )
+
+    def to_control_fields(self) -> dict[str, Any]:
+        """Project onto the fixed .../customsettings control-request field set.
+
+        Deliberately excludes `appliance_id` (URL only, and not even present in the GET
+        response body to begin with). See const.CUSTOM_SETTINGS_REQUEST_FIELDS.
+        """
+        payload: dict[str, Any] = {
+            "double_mode_temp": self.double_mode_temp.to_dict(),
+            "peak_cut": self.peak_cut,
+        }
+        assert set(payload) == set(CUSTOM_SETTINGS_REQUEST_FIELDS)
         return payload
 
 

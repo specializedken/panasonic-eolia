@@ -1,0 +1,42 @@
+{
+  "description": "wind_shield_hit=hit, visually confirmed in the app as the 'deliberately blow air at people' setting (opposite of shield).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable",
+    "air_flow": "not_set",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 0,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "hit",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "comfortable",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "not_set",
+    "wind_shield_hit": "hit",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 21.5,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows the 'blow at me' setting active at wind_shield_hit=hit.",
+  "notes": [
+    "CONFIRMED: EoliaWindShieldHit.HIT wire value round-trips correctly. All 3 wind_shield_hit values now confirmed: not_set (default), shield, hit. All 4 air_flow values also confirmed (12/13/14 series). const.py comments can drop their 'guess' framing for both enums now.",
+    "Moving on to vertical louver (wind_direction) testing next."
+  ]
+}

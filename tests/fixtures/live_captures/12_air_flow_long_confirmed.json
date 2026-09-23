@@ -1,0 +1,43 @@
+{
+  "description": "air_flow=long, visually confirmed in the app. Kevin's physical observation: it blows noticeably more air than normal -- consistent with const.py's existing comment guess ('nanoeX-long', i.e. an extended-reach airflow mode, likely meant to project nanoeX particles further into the room).",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable",
+    "air_flow": "long",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 0,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "comfortable",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "long",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 22.5,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App confirmed; Kevin reports it noticeably increases airflow volume/reach.",
+  "notes": [
+    "CONFIRMED: EoliaAirFlow.LONG wire value round-trips correctly. All 4 air_flow values now confirmed: not_set (default), quiet, powerful, long. Worth removing the 'guess' framing from const.py's comment now that all 4 are visually verified.",
+    "Interesting: this was noted as blowing 'a lot of air' while wind_volume is still 0 (auto) -- air_flow appears to be an independent boost/character mode layered on top of the wind_volume speed setting, not a replacement for it. Worth documenting as an important distinction: wind_volume=fan speed, air_flow=airflow character (quiet/powerful/long), both can be set simultaneously.",
+    "Next: wind_shield_hit (shield/hit), each pending app confirmation."
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "description": "air_flow=quiet, visually confirmed in the app as the 'quiet' wind mode setting.",
+  "appliance_id": "EXAMPLEAPPLIANCEID0000000000000000000000000=",
+  "request": {
+    "ai_control": "comfortable",
+    "air_flow": "quiet",
+    "airquality": false,
+    "nanoex": false,
+    "operation_mode": "Cooling",
+    "operation_status": true,
+    "temperature": 24.0,
+    "timer_value": 0,
+    "wind_direction": 0,
+    "wind_volume": 0,
+    "wind_direction_horizon": "auto",
+    "wind_shield_hit": "not_set",
+    "silence_control": false
+  },
+  "response": {
+    "operation_status": true,
+    "operation_mode": "Cooling",
+    "ai_control": "comfortable",
+    "temperature": 24.0,
+    "wind_volume": 0,
+    "wind_direction": 0,
+    "wind_direction_horizon": "auto",
+    "air_flow": "quiet",
+    "wind_shield_hit": "not_set",
+    "nanoex": false,
+    "airquality": false,
+    "inside_temp": 20.5,
+    "inside_humidity": 75,
+    "outside_temp": 20.0,
+    "aq_name": "off",
+    "aq_value": -1
+  },
+  "app_confirmed": "App shows wind mode 'quiet' at air_flow=quiet.",
+  "notes": [
+    "CONFIRMED: EoliaAirFlow.QUIET wire value round-trips correctly. Next: powerful, then long, each pending app confirmation."
+  ]
+}

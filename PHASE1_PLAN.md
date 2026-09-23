@@ -17,6 +17,16 @@ fan/swing; AI mode/ECONAVI as a `select`; plus read-only sensors for indoor/outd
 humidity, and air quality. Everything else the app does (weekly timer, AI scenes, eco history,
 notifications, firmware checks, etc.) is explicitly deferred — see "Deferred" below.
 
+_Scope grew on 2026-09-23, by explicit request ("we integrate it now"), once a separate
+Claude session found KeepMode's double-temperature range lives on its own resource
+(`/customsettings`) and this session live-confirmed it end-to-end including the first-ever
+PUT: `select.eolia_air_flow`, `select.eolia_wind_shield_hit`,
+`number.eolia_double_temp_low`/`_high`, and `switch.eolia_double_temp_enabled` are now real,
+in addition to everything above. See CLAUDE.md's 2026-09-23 update for the full account,
+including two newly-discovered error codes and the corrected `wind_direction` range (0-6, not
+0-5 — swing is a real 7th state). This section is otherwise kept as the original design
+record._
+
 Built at `custom_components/eolia/` inside this repo. Deployment to europa's real Home Assistant
 is a separate, later step Kevin does himself — this repo stays self-contained per its existing
 ground rules.

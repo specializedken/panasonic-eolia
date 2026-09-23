@@ -27,9 +27,14 @@ from freezegun import freeze_time
 
 from custom_components.eolia.api import EoliaApiClient
 from custom_components.eolia.const import API_BASE_URL
-from custom_components.eolia.exceptions import EoliaApiError, EoliaClockSkewError
+from custom_components.eolia.exceptions import (
+    EoliaApiError,
+    EoliaClockSkewError,
+    EoliaDeviceLockedError,
+)
 
 _STATUS_URL = f"{API_BASE_URL}/devices/APPLIANCE1/status"
+_CUSTOM_SETTINGS_URL = f"{API_BASE_URL}/devices/APPLIANCE1/customsettings"
 
 
 def _make_auth(token: str = "ACCESS_TOKEN") -> AsyncMock:
@@ -161,3 +166,54 @@ async def test_401_after_retry_still_fails_raises_api_error_not_infinite_loop(
     with pytest.raises(EoliaApiError):
         await client.async_get_status("APPLIANCE1")
     auth.async_force_refresh.assert_awaited_once()
+
+
+async def test_device_locked_error_maps_to_dedicated_exception(hass, aioclient_mock):
+    # Confirmed live 2026-09-23: E-21291-01718, triggered by another client (the
+    # official app) writing to the device within the last ~2 minutes.
+    aioclient_mock.put(
+        _STATUS_URL,
+        status=400,
+        json={
+            "code": "E-21291-01718",
+            "message": "他の機器でエアコンが制御されました。2分間変更できません。",
+        },
+    )
+    client = EoliaApiClient(async_get_clientsession(hass), _make_auth())
+    with pytest.raises(EoliaDeviceLockedError) as exc_info:
+        await client.async_set_status("APPLIANCE1", {})
+    assert exc_info.value.code == "E-21291-01718"
+    assert isinstance(exc_info.value, EoliaApiError)
+
+
+async def test_custom_settings_path_url_encodes_appliance_id():
+    path = EoliaApiClient._custom_settings_path(
+        "EXAMPLEAPPLIANCEID0000000000000000000000000="
+    )
+    assert path == "/devices/EXAMPLEAPPLIANCEID0000000000000000000000000%3D/customsettings"
+
+
+async def test_get_custom_settings_parses_real_capture(
+    hass, aioclient_mock, customsettings_response
+):
+    aioclient_mock.get(_CUSTOM_SETTINGS_URL, json=customsettings_response)
+    client = EoliaApiClient(async_get_clientsession(hass), _make_auth())
+    settings = await client.async_get_custom_settings("APPLIANCE1")
+    assert settings.double_mode_temp.high == 28
+    assert settings.double_mode_temp.low == 23
+
+
+async def test_set_custom_settings_narrow_range_error(hass, aioclient_mock):
+    # Confirmed live 2026-09-23: high/low must be at least 5 degrees apart.
+    aioclient_mock.put(
+        _CUSTOM_SETTINGS_URL,
+        status=400,
+        json={
+            "code": "E-21291-02009",
+            "message": "温度設定は5℃以上開くように設定してください。",
+        },
+    )
+    client = EoliaApiClient(async_get_clientsession(hass), _make_auth())
+    with pytest.raises(EoliaApiError) as exc_info:
+        await client.async_set_custom_settings("APPLIANCE1", {})
+    assert exc_info.value.code == "E-21291-02009"

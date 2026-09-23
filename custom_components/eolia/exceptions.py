@@ -38,6 +38,17 @@ class EoliaClockSkewError(EoliaApiError):
     """
 
 
+class EoliaDeviceLockedError(EoliaApiError):
+    """Raised for E-21291-01718 -- another client wrote to the device recently.
+
+    Confirmed live 2026-09-23: triggered by the official app writing to the device
+    (even a no-op write from just opening/closing a settings menu, not only an actual
+    value change), which locks out other clients' writes for ~2 minutes. Not something
+    the integration can fix itself, but distinct from a real failure -- a retry shortly
+    after should succeed on its own.
+    """
+
+
 class EoliaNetworkError(EoliaApiError):
     """Raised for a transport-level failure (timeout, connection error) with no HTTP response.
 
