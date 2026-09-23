@@ -15,3 +15,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# Icons extracted from the proprietary APK (tools/extract_icons.py) -- local-only, same policy as code/.
+icons/
