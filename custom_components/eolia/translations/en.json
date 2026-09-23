@@ -35,6 +35,34 @@
     }
   },
   "entity": {
+    "climate": {
+      "eolia": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "Auto": "Auto",
+              "Cooling": "Cooling",
+              "Heating": "Heating",
+              "KeepHeating": "Heating (continuous fan)",
+              "Blast": "Fan only",
+              "Dehumidifying": "Dehumidify",
+              "CoolDehumidifying": "Cool & Dehumidify",
+              "ComfortableDehumidification": "Dry (comfort dehumidify)",
+              "ClothesDryer": "Clothes drying",
+              "MoistCooling": "Moist cooling",
+              "AutoTempControl": "Auto temperature",
+              "KeepMode": "Double temperature",
+              "SmellCare": "Odor care",
+              "SmellCareSpot": "Odor care (spot)",
+              "NanoexCleaning": "Away clean (nanoeX)",
+              "Cleaning": "Self-clean",
+              "Stop": "Stop",
+              "Other": "Other"
+            }
+          }
+        }
+      }
+    },
     "select": {
       "ai_mode": {
         "name": "AI mode",

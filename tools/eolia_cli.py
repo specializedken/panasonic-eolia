@@ -30,6 +30,7 @@ import asyncio
 import json
 import os
 import sys
+import textwrap
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -54,6 +55,8 @@ from custom_components.eolia.const import (  # noqa: E402
     CONF_ACCESS_TOKEN,
     CONF_EXPIRES_AT,
     CONF_REFRESH_TOKEN,
+    OPERATION_MODE_DESCRIPTIONS,
+    EoliaOperationMode,
 )
 from custom_components.eolia.exceptions import EoliaApiError, EoliaAuthError  # noqa: E402
 from custom_components.eolia.models import EoliaCustomSettings, EoliaStatus  # noqa: E402
@@ -304,6 +307,18 @@ async def cmd_set_double_temp(args: argparse.Namespace) -> None:
         print(json.dumps(_custom_settings_dict(new_settings), indent=2))
 
 
+async def cmd_modes(_args: argparse.Namespace) -> None:
+    """Print a description of every operation_mode value -- see const.py for sourcing."""
+    for mode in EoliaOperationMode:
+        description = OPERATION_MODE_DESCRIPTIONS.get(mode.value, "(no description)")
+        print(mode.value)
+        for line in textwrap.wrap(
+            description, width=76, initial_indent="    ", subsequent_indent="    "
+        ):
+            print(line)
+        print()
+
+
 def _bool_arg(value: str) -> bool:
     if value.lower() in ("true", "1", "on", "yes"):
         return True
@@ -321,6 +336,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("login", help="Run the manual PKCE login flow and cache tokens")
     sub.add_parser("refresh", help="Force a refresh_token exchange")
     sub.add_parser("devices", help="List devices on the account")
+    sub.add_parser(
+        "modes", help="Describe every operation_mode value (what each one actually does)"
+    )
 
     p_status = sub.add_parser("status", help="GET current status")
     p_status.add_argument("appliance_id", nargs="?", default=None)
@@ -328,7 +346,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_set = sub.add_parser("set", help="Read-modify-write a real control change")
     p_set.add_argument("appliance_id", nargs="?", default=None)
     p_set.add_argument("--power", choices=["on", "off"])
-    p_set.add_argument("--mode", help="operation_mode wire value, e.g. Cooling")
+    p_set.add_argument(
+        "--mode",
+        help="operation_mode wire value, e.g. Cooling -- run 'modes' for what each one does",
+    )
     p_set.add_argument("--temp", type=float)
     p_set.add_argument("--fan", type=int, help="wind_volume")
     p_set.add_argument("--swing", type=int, help="wind_direction (vertical louver)")
@@ -381,6 +402,7 @@ async def _async_main() -> None:
         "login": cmd_login,
         "refresh": cmd_refresh,
         "devices": cmd_devices,
+        "modes": cmd_modes,
         "status": cmd_status,
         "set": cmd_set,
         "customsettings": cmd_customsettings,

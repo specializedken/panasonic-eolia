@@ -167,6 +167,34 @@ So **"Dry" vs "Cool & Dehumidify" are two distinct `operation_mode` string value
 body as everything else — not a separate flag, not ECHONET, confirming the original hardware
 investigation.
 
+### What the cooling/dehumidify family actually does — official docs + live confirmation
+
+Added 2026-09-23, prompted by this being genuinely confusing (five modes that all sound like
+"cooling but drier/damper"). Cross-referenced Panasonic's own published glossary/feature pages
+against what was independently confirmed live this session (see the walkthrough log below and
+`tests/fixtures/live_captures/`), and they line up closely — in particular, the official
+快適除湿 page states its humidity range as **50–60%**, exactly matching the `{50, 55, 60}`
+bisected live, and 冷房除湿's documented **16–30°C** temperature range matches what
+`CoolDehumidifying` accepted live.
+
+| `operation_mode` | Official name | What it actually does |
+|---|---|---|
+| `Cooling` | 冷房 (Cooling) | Standard cooling, real target temperature (16–30°C). |
+| `CoolDehumidifying` | 冷房除湿 (Cool & Dehumidify) | Lowers **both** temperature and humidity — same real target temperature (16–30°C) as `Cooling`, just drier. Colder/stronger than `ComfortableDehumidification`. |
+| `ComfortableDehumidification` | 快適除湿 (Comfortable Dehumidify) — this project calls it "Dry" | Lowers humidity **only** — partial heat-exchanger control keeps the room from getting cold. **Targets a humidity level (50–60%, 5% steps), not a temperature** — `temperature` is fixed at `0.0` and a real value is rejected (`E-21291-01712`). Also **requires `humidity` in the PUT body**, the one exception to the general "exclude `humidity`" rule (see `Control request JSON shape` above) — omitting it fails with `E-21291-00007` regardless of any other field. |
+| `MoistCooling` | しっとり冷房 (Moist Cooling) | Cools while deliberately keeping humidity **higher** than plain cooling would, to avoid the dry/cold feel of standard AC; energy-saving. Real target temperature (16–30°C) — the opposite intent of the two dehumidify modes above. |
+| `ClothesDryer` | 衣類乾燥 (Clothes Drying) | Strong dehumidify + fan combo for drying indoor-hung laundry (nanoeX also suppresses damp-laundry odor). **No temperature control** (fixed at `0.0`, same requirement as `ComfortableDehumidification`) **but does NOT need `humidity`** in the payload — a third, distinct category. Panasonic recommends using it only when the room is unoccupied. |
+| `Blast` | 送風 (Air Blower) | Fan only — no heating/cooling/dehumidifying at all. No temperature control shown in the app (the API still accepts a nonzero `temperature`, but it's inert). |
+
+Sources: <https://panasonic.jp/aircon/glossary/cooling.html>,
+<https://panasonic.jp/aircon/feature/dehumidification.html>,
+<https://jpn.faq.panasonic.com/app/answers/detail/a_id/9750> (clothes drying).
+
+Full descriptions for every `operation_mode` value (including the ones above and the
+less-common ones not part of this research pass) now live in code as
+`const.OPERATION_MODE_DESCRIPTIONS`, surfaced via `tools/eolia_cli.py modes` and as
+`preset_mode` state labels in the HA climate entity (`strings.json`/`translations/en.json`).
+
 ### `KeepMode` / ダブル温度設定 ("double temperature setting") — range lives in `/customsettings`
 
 Added 2026-09-23. `operation_mode: "KeepMode"` only tells you the mode is active; `/status`

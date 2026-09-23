@@ -74,6 +74,90 @@ class EoliaOperationMode(StrEnum):
     OTHER = "Other"
 
 
+# Short, human-readable descriptions of what each operation_mode actually does --
+# requested 2026-09-23 since the cooling/dehumidify family in particular is genuinely
+# confusing (multiple modes that all sound like "cooling but drier"). The
+# Cooling/CoolDehumidifying/ComfortableDehumidification/MoistCooling/ClothesDryer/Blast
+# descriptions are sourced from Panasonic's own published glossary and feature pages
+# (see URLs below) and line up closely with what was independently confirmed live this
+# session -- notably, the official 快適除湿 (Comfortable Dehumidify) page states its
+# humidity range as 50-60%, exactly matching the {50, 55, 60} bisected live in
+# tests/fixtures/live_captures/20-24, and 冷房除湿's documented 16-30C temperature range
+# matches what CoolDehumidifying accepted live. The remaining modes (Auto, Heating,
+# KeepHeating, Dehumidifying, AutoTempControl, KeepMode, SmellCare/SmellCareSpot,
+# NanoexCleaning, Cleaning, Stop, Other) are not part of that research pass -- their
+# descriptions are either self-evident or carried over from findings.md's original
+# decompiled Japanese-label table, not independently verified against official docs.
+# Sources:
+#   https://panasonic.jp/aircon/glossary/cooling.html
+#   https://panasonic.jp/aircon/feature/dehumidification.html
+#   https://jpn.faq.panasonic.com/app/answers/detail/a_id/9750 (clothes drying)
+OPERATION_MODE_DESCRIPTIONS: dict[str, str] = {
+    "Auto": "Automatically picks cooling, heating, or fan based on conditions.",
+    "Cooling": "Standard cooling. Targets a set temperature (16-30C).",
+    "Heating": "Standard heating. Targets a set temperature.",
+    "KeepHeating": (
+        "Heating with the fan kept running continuously (no warm-up standby pause), "
+        "to avoid a draft of cool air while the unit is heating up."
+    ),
+    "Blast": (
+        "Fan only -- circulates air without heating, cooling, or dehumidifying. "
+        "No temperature control."
+    ),
+    "Dehumidifying": (
+        "Generic dehumidify wire value. Never confirmed as an actual app-reachable "
+        "option on this device -- the app's own 'dehumidification' menu item maps to "
+        "ComfortableDehumidification instead."
+    ),
+    "CoolDehumidifying": (
+        "\"Cool & Dehumidify\" (冷房除湿). Lowers BOTH temperature and "
+        "humidity -- a real target temperature (16-30C), same as Cooling but drier. "
+        "Colder and stronger than ComfortableDehumidification."
+    ),
+    "ComfortableDehumidification": (
+        "\"Dry\" / Comfortable Dehumidify (快適除湿). Lowers humidity "
+        "ONLY, with minimal cooling effect (partial heat-exchanger control keeps the "
+        "room from getting cold). Targets a humidity level (50-60%, 5% steps) instead "
+        "of a temperature -- temperature is fixed, not user-settable."
+    ),
+    "ClothesDryer": (
+        "Clothes drying (衣類乾燥). Strong dehumidify + fan combo for "
+        "drying indoor-hung laundry; nanoeX also suppresses damp-laundry odor. No "
+        "temperature or fan-speed control (both fixed/automatic). Panasonic recommends "
+        "using it only when the room is unoccupied."
+    ),
+    "MoistCooling": (
+        "\"Moist Cooling\" (しっとり冷房). Cools while "
+        "deliberately keeping humidity HIGHER than plain cooling would, to avoid the "
+        "dry/cold feeling of standard AC -- energy-saving too. Real target temperature "
+        "(16-30C) -- the opposite intent of the dehumidify-family modes above."
+    ),
+    "AutoTempControl": (
+        "\"Leave it to us\" auto temperature control (おまかせ温"
+        "度制御). AI-adjusted target temperature using outdoor-temperature "
+        "correction; not independently researched against official docs."
+    ),
+    "KeepMode": (
+        "\"Double temperature setting\" (ダブル温度設定). "
+        "Maintains room temperature within a low/high band rather than one target. "
+        "The actual range lives on a separate API resource (.../customsettings, not "
+        "/status) -- see number.eolia_double_temp_low/_high."
+    ),
+    "SmellCare": "Odor-care (においケア) -- deodorizing mode.",
+    "SmellCareSpot": (
+        "Targeted odor-care (においケア ねらって"
+        "脱臭) -- deodorizes a specific spot/area rather than the whole room."
+    ),
+    "NanoexCleaning": (
+        "\"Away clean\" (おでかけクリーン) -- a nanoeX "
+        "self-cleaning cycle, meant to run while nobody's home."
+    ),
+    "Cleaning": "Self-clean (おそうじ) -- internal cleaning cycle.",
+    "Stop": "Power off.",
+    "Other": "Unknown/unrecognized mode value -- fallback display only, never selectable.",
+}
+
+
 # --- ai_control enum (wire values) ------------------------------------------------------
 # AI mode / ECONAVI are NOT independently toggleable in this API -- ECONAVI is a third
 # state of the same field alongside AI-comfort-mode. See findings.md.

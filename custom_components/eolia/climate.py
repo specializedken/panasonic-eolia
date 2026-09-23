@@ -101,6 +101,13 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
     """Climate entity for one Eolia device."""
 
     _attr_name = None  # use the device name
+    # Enables preset_mode's state_attributes translation (strings.json's
+    # entity.climate.eolia.state_attributes.preset_mode.state) so the UI shows a real
+    # label ("Cool & Dehumidify") instead of the raw wire value
+    # ("CoolDehumidifying") -- requested 2026-09-23, the cooling/dehumidify family in
+    # particular was confusing without it. Does NOT affect the entity's own name:
+    # `_attr_name = None` above always wins over any translation-key-driven naming.
+    _attr_translation_key = "eolia"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = PROVISIONAL_TEMPERATURE_STEP
     _attr_hvac_modes = [
