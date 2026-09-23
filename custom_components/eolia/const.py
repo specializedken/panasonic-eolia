@@ -334,6 +334,34 @@ PROVISIONAL_TEMPERATURE_STEP = 1.0
 # documentation -- there is no "right" answer for a temperature the user never chose.
 FALLBACK_TEMPERATURE = 24.0
 
+# operation_mode -> the /products/{code}/functions flag that gates it. The official app only
+# offers a mode when its flag is true for the device (decompiled i9/y.java), and this
+# unit's live rejections match: auto_temp_control, smell_care_spot and
+# reheat_dehumidification are all false for CS-712DX2-W. Modes not listed here have no
+# flag in the app's mode picker.
+OPERATION_MODE_FUNCTION_IDS = {
+    EoliaOperationMode.BLAST: "blast",
+    EoliaOperationMode.CLOTHES_DRYER: "clothes_dryer",
+    EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION: "comfortable_dehumidification",
+    EoliaOperationMode.DEHUMIDIFYING: "reheat_dehumidification",
+    EoliaOperationMode.MOIST_COOLING: "moist_cooling",
+    EoliaOperationMode.AUTO_TEMP_CONTROL: "auto_temp_control",
+    EoliaOperationMode.SMELL_CARE: "smell_care",
+    EoliaOperationMode.SMELL_CARE_SPOT: "smell_care_spot",
+    EoliaOperationMode.NANOEX_CLEANING: "nanoex_cleaning",
+    EoliaOperationMode.CLEANING: "cleaning",
+}
+
+# The "care/clean" family: live-confirmed 2026-09-23 (SmellCare, NanoexCleaning, Cleaning)
+# to RUN the unit while /status reports operation_status=False. The app groups these four
+# together too (same style/animation, never saved as the "last mode").
+CLEAN_FAMILY_MODES = (
+    EoliaOperationMode.SMELL_CARE,
+    EoliaOperationMode.SMELL_CARE_SPOT,
+    EoliaOperationMode.NANOEX_CLEANING,
+    EoliaOperationMode.CLEANING,
+)
+
 # operation_modes with no user-settable target temperature: the server wants 0.0 and
 # rejects anything else with E-21291-01712. Both live-confirmed 2026-09-23.
 NO_TARGET_TEMPERATURE_MODES = (

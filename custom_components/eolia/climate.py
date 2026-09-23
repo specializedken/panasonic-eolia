@@ -25,7 +25,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import EoliaConfigEntry
 from .const import (
+    CLEAN_FAMILY_MODES,
     NO_TARGET_TEMPERATURE_MODES,
+    OPERATION_MODE_FUNCTION_IDS,
     PROVISIONAL_TEMPERATURE_STEP,
     WIND_DIRECTION_LEVELS,
     WIND_VOLUME_LEVELS,
@@ -141,7 +143,6 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
         HVACMode.DRY,
         HVACMode.FAN_ONLY,
     ]
-    _attr_preset_modes = _SETTABLE_PRESET_MODES
     _attr_swing_horizontal_modes = _SWING_HORIZONTAL_MODES
     _attr_swing_modes = _SWING_MODES
     _attr_fan_modes = _FAN_MODES
@@ -162,10 +163,26 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
         self._attr_unique_id = f"{appliance_id}_climate"
 
     @property
+    def preset_modes(self) -> list[str]:
+        """Only modes this model supports (per /products/{code}/functions)."""
+        return [
+            mode
+            for mode in _SETTABLE_PRESET_MODES
+            if self.coordinator.supports(
+                self._appliance_id,
+                OPERATION_MODE_FUNCTION_IDS.get(EoliaOperationMode(mode), ""),
+            )
+        ]
+
+    @property
     def hvac_mode(self) -> HVACMode | None:
         status = self._status
         if status is None:
             return None
+        # The clean family runs the unit while operation_status is False (live-confirmed
+        # 2026-09-23), so it must be checked before the power test.
+        if status.operation_mode in CLEAN_FAMILY_MODES:
+            return HVACMode.FAN_ONLY
         if not status.operation_status:
             return HVACMode.OFF
         try:
@@ -218,9 +235,21 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
-            await self.coordinator.async_set_status(
-                self._appliance_id, operation_status=False
-            )
+            changes: dict[str, Any] = {"operation_status": False}
+            status = self._status
+            if status is not None and status.operation_mode in CLEAN_FAMILY_MODES:
+                # Already operation_status=False while running, so that alone is a no-op.
+                # operation_mode=Stop is rejected (E-21291-01711, live 2026-09-23); send the
+                # exact normalized stop body the official app builds (decompiled
+                # ControlFetchCommandRHRequest.setData, status=false branch). UNVERIFIED live.
+                changes.update(
+                    operation_mode=EoliaOperationMode.AUTO.value,
+                    temperature=16.0,
+                    wind_volume=0,
+                    wind_direction=0,
+                    wind_direction_horizon="auto",
+                )
+            await self.coordinator.async_set_status(self._appliance_id, **changes)
             return
         default_mode = _DEFAULT_MODE_FOR_HVAC_MODE.get(hvac_mode)
         if default_mode is None:

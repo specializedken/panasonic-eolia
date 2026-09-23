@@ -203,6 +203,25 @@ async def test_get_custom_settings_parses_real_capture(
     assert settings.double_mode_temp.low == 23
 
 
+async def test_get_functions_returns_flag_map(hass, aioclient_mock):
+    # Shape captured live 2026-09-23 from GET /products/CS-712DX2-W/functions.
+    aioclient_mock.get(
+        f"{API_BASE_URL}/products/CS-712DX2-W/functions",
+        json={
+            "ac_function_list": [
+                {"function_id": "smell_care", "function_value": True},
+                {"function_id": "smell_care_spot", "function_value": False},
+            ],
+            "product_code": "CS-712DX2-W",
+        },
+    )
+    client = EoliaApiClient(async_get_clientsession(hass), _make_auth())
+    assert await client.async_get_functions("CS-712DX2-W") == {
+        "smell_care": True,
+        "smell_care_spot": False,
+    }
+
+
 async def test_set_custom_settings_narrow_range_error(hass, aioclient_mock):
     # Confirmed live 2026-09-23: high/low must be at least 5 degrees apart.
     aioclient_mock.put(

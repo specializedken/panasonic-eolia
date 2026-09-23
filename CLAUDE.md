@@ -467,12 +467,38 @@ this repo as a design doc if that plan file isn't available in a future session)
     `E-21291-00007` -- real contract unknown (decompiled APK might show it). Excluded.
   - **Unexplained**: Kevin reported the unit turning on at ~14:06 while the cloud
     reported `Stop` and only rejected/`status=false` writes had been sent. Unresolved.
-  - 151 tests now (up from 132 at the start of this pass).
+  - **Per-model capability flags exist and explain most rejections.** The app fetches
+    `GET /products/{productCode}/functions` (found in decompiled `a9/d.java`; same host
+    and auth as `/status`) -> `{function_id: true/false}` and only offers a mode/feature
+    when its flag is true. For CS-712DX2-W: `auto_temp_control`, `smell_care_spot`,
+    `reheat_dehumidification` (plain `Dehumidifying`), `airquality`, `circulation`,
+    `ventilation`, `good_sleep_control`, `zone` are all **false**, matching every live
+    rejection; `smell_care`, `cleaning`, `nanoex_cleaning`, `blast`, `clothes_dryer`,
+    `comfortable_dehumidification`, `moist_cooling` are true. `KeepHeating` has no flag in
+    the list, so its rejection is still unexplained; `MoistCooling` is flagged true yet
+    silently downgrades to `Cooling`, also unexplained. Implemented: `api.async_get_functions`,
+    `coordinator.functions`/`supports()` (fetched once, non-fatal, unknown = allow),
+    `const.OPERATION_MODE_FUNCTION_IDS`; `climate.preset_modes` is now filtered per model,
+    and the air-quality switch is only created if the model has `airquality`. The
+    hardcoded exclusions (`Dehumidifying`, `AutoTempControl`, `KeepHeating`, `Nanoe`) stay,
+    since they are untested on models that do support them.
+  - **The clean family (`SmellCare`/`SmellCareSpot`/`NanoexCleaning`/`Cleaning`) RUNS the
+    unit while `/status` says `operation_status: false`** (live for SmellCare,
+    NanoexCleaning, Cleaning; the server also forces `nanoex` itself: on for SmellCare,
+    off for NanoexCleaning). The app special-cases them everywhere (init exempts them from
+    the "status false = stopped" logic; never saves them as the "last mode"). `climate`
+    now reports them as `FAN_ONLY`. **Stopping one**: `operation_mode: Stop` is rejected
+    (`E-21291-01711`); it works with the app's own normalized stop body
+    (`ControlFetchCommandRHRequest.setData`, status=false branch): `operation_status:
+    false`, `operation_mode: "Auto"`, `temperature: 16.0`, `wind_volume: 0`,
+    `wind_direction: 0`, `wind_direction_horizon: "auto"` -- live-confirmed the unit
+    stopped. The mode-mismatch check ignores the expected `Stop` when powering off. The
+    "can't change X while the AC is off" guard still fires in these modes (untested).
+  - 165 tests now (up from 132 at the start of this pass).
 - **Next step**: resume the live "impossible combinations" audit -- systematically drive
   every remaining `operation_mode`/field combination through the real HA UI while
   watching `docker logs -f homeassistant | grep -i eolia` (the debug logger is still on
-  for exactly this). Not yet exercised this way: `SmellCare`/`SmellCareSpot`/
-  `NanoexCleaning`/`Cleaning`/`Auto` combined with
+  for exactly this). Not yet exercised this way: `Auto` and the clean family combined with
   nanoex/ai_control/silence_control in various combinations, and the double-temperature
   (`KeepMode`) and Dry-humidity number entities haven't been exercised live through HA
   yet either (only unit-tested + confirmed via the CLI previously). Also still open: the

@@ -94,6 +94,24 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # straight into an invalid payload -- live-confirmed 2026-09-23, see const.py's
         # FALLBACK_TEMPERATURE.
         self._temperature_cache: dict[str, float] = {}
+        # Per-model capability flags from /products/{code}/functions, keyed by
+        # appliance_id. Absent = not fetched (yet, or the fetch failed): treated as
+        # "unknown, allow everything" so a failure here never removes working features.
+        self.functions: dict[str, dict[str, bool]] = {}
+
+    def supports(self, appliance_id: str, function_id: str) -> bool:
+        flags = self.functions.get(appliance_id)
+        return True if flags is None else flags.get(function_id, True)
+
+    async def _async_fetch_functions(self, appliance_id: str) -> None:
+        if appliance_id in self.functions:
+            return
+        try:
+            self.functions[appliance_id] = await self.api.async_get_functions(
+                self.devices[appliance_id].product_code
+            )
+        except (EoliaApiError, EoliaAuthError) as err:
+            _LOGGER.debug("Failed to fetch functions for %s: %s", appliance_id, err)
 
     def _remember_temperature(self, appliance_id: str, status: EoliaStatus) -> None:
         if status.temperature:
@@ -104,6 +122,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         for appliance_id in self.devices:
             statuses[appliance_id] = await self._async_get_status(appliance_id)
             self._remember_temperature(appliance_id, statuses[appliance_id])
+            await self._async_fetch_functions(appliance_id)
             await self._async_refresh_custom_settings(appliance_id)
         return statuses
 
@@ -237,6 +256,8 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         requested_mode = payload["operation_mode"]
         if (
             "operation_mode" in changes
+            # Powering off legitimately reports Stop whatever mode the request carried.
+            and payload["operation_status"]
             and new_status.operation_mode != requested_mode
             and not (
                 requested_mode == EoliaOperationMode.BLAST

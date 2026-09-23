@@ -72,3 +72,15 @@ async def test_turn_on_proceeds_when_powered_on(coordinator, description):
     await entity.async_turn_on()
 
     coordinator.api.async_set_status.assert_awaited_once()
+
+
+def test_airquality_switch_is_gated_by_the_models_airquality_flag(coordinator):
+    # CS-712DX2-W reports airquality: false in /products/{code}/functions.
+    airquality = next(d for d in SWITCH_DESCRIPTIONS if d.key == "airquality")
+    assert airquality.function_id == "airquality"
+    assert coordinator.supports(APPLIANCE_ID, airquality.function_id) is True
+    coordinator.functions[APPLIANCE_ID] = {"airquality": False}
+    assert coordinator.supports(APPLIANCE_ID, airquality.function_id) is False
+    # Ungated switches (empty function_id) are never affected.
+    nanoex = next(d for d in SWITCH_DESCRIPTIONS if d.key == "nanoex")
+    assert coordinator.supports(APPLIANCE_ID, nanoex.function_id) is True

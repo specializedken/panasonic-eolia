@@ -270,3 +270,85 @@ async def test_keep_mode_preset_is_routed_through_customsettings(coordinator):
         APPLIANCE_ID, double_mode_temp_status=True
     )
     coordinator.api.async_set_status.assert_not_awaited()
+
+
+# --- Capability gating + the clean family -------------------------------------------------
+
+
+def _clean_status(mode: EoliaOperationMode) -> EoliaStatus:
+    # Live-confirmed 2026-09-23: these modes run the unit with operation_status False.
+    return EoliaStatus.from_dict(
+        {
+            "appliance_id": APPLIANCE_ID,
+            "operation_status": False,
+            "operation_mode": mode.value,
+        }
+    )
+
+
+def test_preset_modes_are_filtered_by_the_models_functions(coordinator):
+    coordinator.functions[APPLIANCE_ID] = {
+        "smell_care_spot": False,
+        "auto_temp_control": False,
+        "smell_care": True,
+    }
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    assert EoliaOperationMode.SMELL_CARE_SPOT.value not in entity.preset_modes
+    assert EoliaOperationMode.SMELL_CARE.value in entity.preset_modes
+    # Modes with no flag in the app's picker are never filtered.
+    assert EoliaOperationMode.COOLING.value in entity.preset_modes
+
+
+def test_preset_modes_are_unfiltered_when_functions_are_unknown(coordinator):
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+    assert entity.preset_modes == _SETTABLE_PRESET_MODES
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        EoliaOperationMode.SMELL_CARE,
+        EoliaOperationMode.SMELL_CARE_SPOT,
+        EoliaOperationMode.NANOEX_CLEANING,
+        EoliaOperationMode.CLEANING,
+    ],
+)
+def test_clean_family_reads_as_running_even_with_operation_status_false(coordinator, mode):
+    coordinator.async_set_updated_data({APPLIANCE_ID: _clean_status(mode)})
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    assert entity.hvac_mode == HVACMode.FAN_ONLY
+
+
+async def test_turning_off_from_the_clean_family_sends_the_apps_stop_body(coordinator):
+    coordinator.async_set_updated_data(
+        {APPLIANCE_ID: _clean_status(EoliaOperationMode.SMELL_CARE)}
+    )
+    coordinator.async_set_status = AsyncMock()
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_set_hvac_mode(HVACMode.OFF)
+
+    # The official app's normalized stop body (Stop itself is rejected by the server).
+    coordinator.async_set_status.assert_awaited_once_with(
+        APPLIANCE_ID,
+        operation_status=False,
+        operation_mode="Auto",
+        temperature=16.0,
+        wind_volume=0,
+        wind_direction=0,
+        wind_direction_horizon="auto",
+    )
+
+
+async def test_turning_off_a_normal_mode_only_sets_operation_status(coordinator):
+    coordinator.async_set_updated_data({APPLIANCE_ID: _status(operation_status=True)})
+    coordinator.async_set_status = AsyncMock()
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_set_hvac_mode(HVACMode.OFF)
+
+    coordinator.async_set_status.assert_awaited_once_with(
+        APPLIANCE_ID, operation_status=False
+    )

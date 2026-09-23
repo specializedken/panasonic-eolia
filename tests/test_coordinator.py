@@ -447,6 +447,60 @@ async def test_turning_double_temp_off_does_not_flag_the_expected_range_reset(co
     await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=False)
 
 
+async def test_supports_is_permissive_until_functions_are_known(coordinator):
+    assert coordinator.supports(APPLIANCE_ID, "smell_care_spot") is True
+    coordinator.functions[APPLIANCE_ID] = {"smell_care_spot": False, "smell_care": True}
+    assert coordinator.supports(APPLIANCE_ID, "smell_care_spot") is False
+    assert coordinator.supports(APPLIANCE_ID, "smell_care") is True
+    assert coordinator.supports(APPLIANCE_ID, "not_in_the_list") is True
+
+
+async def test_update_data_fetches_functions_once_and_failure_is_non_fatal(
+    coordinator, initial_status, initial_custom_settings
+):
+    coordinator.api.async_get_status.return_value = initial_status
+    coordinator.api.async_get_custom_settings.return_value = initial_custom_settings
+    coordinator.api.async_get_functions.return_value = {"smell_care": False}
+
+    await coordinator._async_update_data()
+    await coordinator._async_update_data()
+
+    coordinator.api.async_get_functions.assert_awaited_once_with("CS-712DX2-W")
+    assert coordinator.supports(APPLIANCE_ID, "smell_care") is False
+
+
+async def test_functions_fetch_failure_keeps_everything_allowed(
+    coordinator, initial_status, initial_custom_settings
+):
+    coordinator.api.async_get_status.return_value = initial_status
+    coordinator.api.async_get_custom_settings.return_value = initial_custom_settings
+    coordinator.api.async_get_functions.side_effect = EoliaApiError(400, "E-X", "boom")
+
+    await coordinator._async_update_data()
+
+    assert coordinator.supports(APPLIANCE_ID, "smell_care") is True
+
+
+async def test_powering_off_is_not_flagged_as_a_mode_mismatch(coordinator, initial_status):
+    # Off legitimately reports Stop even though the request carried another mode.
+    stopped = EoliaStatus.from_dict(
+        {
+            **initial_status.to_control_fields(),
+            "appliance_id": APPLIANCE_ID,
+            "operation_status": False,
+            "operation_mode": "Stop",
+        }
+    )
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.return_value = stopped
+
+    await coordinator.async_set_status(
+        APPLIANCE_ID, operation_status=False, operation_mode="Auto"
+    )
+
+    assert coordinator.data[APPLIANCE_ID] is stopped
+
+
 async def test_get_humidity_defaults_to_lowest_confirmed_value(coordinator):
     assert coordinator.get_humidity(APPLIANCE_ID) == 50
 

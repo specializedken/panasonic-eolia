@@ -29,6 +29,7 @@ class EoliaSwitchEntityDescription(SwitchEntityDescription):
 
     is_on_fn: Callable[[EoliaDataUpdateCoordinator, str], bool]
     control_field: str  # kwarg name passed to coordinator.async_set_status
+    function_id: str = ""  # /products/{code}/functions flag gating this switch, if any
 
 
 SWITCH_DESCRIPTIONS: tuple[EoliaSwitchEntityDescription, ...] = (
@@ -44,6 +45,7 @@ SWITCH_DESCRIPTIONS: tuple[EoliaSwitchEntityDescription, ...] = (
         key="airquality",
         translation_key="air_quality_monitor",
         control_field="airquality",
+        function_id="airquality",
         is_on_fn=lambda coordinator, appliance_id: bool(
             coordinator.data[appliance_id].airquality
         ),
@@ -70,6 +72,8 @@ async def async_setup_entry(
         EoliaSwitch(coordinator, appliance_id, description)
         for appliance_id in coordinator.devices
         for description in SWITCH_DESCRIPTIONS
+        # The model's own capability flag (e.g. airquality is false for CS-712DX2-W).
+        if coordinator.supports(appliance_id, description.function_id)
     ]
     entities.extend(
         EoliaDoubleTempEnabledSwitch(coordinator, appliance_id)

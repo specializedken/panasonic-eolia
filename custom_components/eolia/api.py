@@ -65,6 +65,21 @@ class EoliaApiClient:
         )
         return EoliaStatus.from_dict(data)
 
+    async def async_get_functions(self, product_code: str) -> dict[str, bool]:
+        """GET /products/{product_code}/functions -- which features this model supports.
+
+        Returns {function_id: supported}. The official app only offers a mode/feature when
+        its flag is true here (found in the decompiled APK, a9/d.java + i9/y.java).
+        """
+        data = await self._async_request(
+            "GET", f"/products/{quote(product_code, safe='')}/functions"
+        )
+        return {
+            item["function_id"]: bool(item.get("function_value"))
+            for item in data.get("ac_function_list", [])
+            if item.get("function_id")
+        }
+
     async def async_get_custom_settings(self, appliance_id: str) -> EoliaCustomSettings:
         """GET /devices/{appliance_id}/customsettings -- KeepMode's double-temp range."""
         data = await self._async_request("GET", self._custom_settings_path(appliance_id))
