@@ -22,6 +22,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import EoliaApiClient
 from .const import (
+    AIR_FLOW_CONFLICTING_WITH_SHIELD_HIT,
+    AIR_FLOW_UNSUPPORTED_MODES,
     DEFAULT_SCAN_INTERVAL_SECONDS,
     DOMAIN,
     DOUBLE_MODE_TEMP_HIGH_RANGE,
@@ -31,6 +33,8 @@ from .const import (
     FALLBACK_TEMPERATURE,
     CLEAN_FAMILY_MODES,
     NO_TARGET_TEMPERATURE_MODES,
+    NOT_SET,
+    SHIELD_HIT_UNSUPPORTED_MODES,
     EoliaOperationMode,
 )
 from .exceptions import (
@@ -48,6 +52,47 @@ _LOGGER = logging.getLogger(__name__)
 # error never gets auto-retried (resending an identical bad request won't help, and
 # repeated failed writes against production infra should stay a conscious action).
 _NETWORK_RETRY_DELAY_SECONDS = 2
+
+
+_KEEP_MODE_ERROR = (
+    "The AC is in double-temperature (KeepMode) mode, which only accepts changes to its own "
+    "low/high range. Pick another mode first to change this setting."
+)
+
+# Fields the server silently overrides when they conflict with another setting (live-confirmed
+# 2026-09-24, see const.py's exclusion rules): field name -> label used in the error message.
+_WATCHED_FIELDS = {
+    "wind_volume": "fan speed",
+    "wind_direction": "vertical louver",
+    "wind_direction_horizon": "horizontal louver",
+    "wind_shield_hit": "wind shield/hit",
+    "air_flow": "air flow",
+}
+
+
+def _ignore_reason(field: str, new: EoliaStatus) -> str:
+    """Explain why the unit answered 200 but did not apply `field`, from the resulting state."""
+    if not new.operation_status:
+        return "the AC is off or running a cleaning mode"
+    shield_on = new.wind_shield_hit != NOT_SET
+    if field in ("wind_volume", "wind_direction", "wind_direction_horizon") and shield_on:
+        return (
+            "wind shield/hit is on and keeps the fan and both louvers on auto -- "
+            "turn it off first"
+        )
+    if field == "wind_volume" and new.air_flow != NOT_SET:
+        return f"air flow '{new.air_flow}' keeps the fan on auto -- set air flow to not_set first"
+    if field == "wind_shield_hit":
+        if new.operation_mode in SHIELD_HIT_UNSUPPORTED_MODES:
+            return f"wind shield/hit isn't available in {new.operation_mode} mode"
+        if new.air_flow in AIR_FLOW_CONFLICTING_WITH_SHIELD_HIT:
+            return (
+                f"air flow '{new.air_flow}' conflicts with it -- set air flow to not_set or "
+                "powerful first"
+            )
+    if field == "air_flow" and new.operation_mode in AIR_FLOW_UNSUPPORTED_MODES:
+        return f"air flow isn't available in {new.operation_mode} mode"
+    return "the unit did not apply it"
 
 
 class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
@@ -249,6 +294,22 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         if current is None:
             current = await self.api.async_get_status(appliance_id)
 
+        # Live-confirmed 2026-09-24 (fuzz + direct probe): while the unit is in KeepMode every
+        # /status write that carries KeepMode back is rejected (E-21291-01711) -- including
+        # powering off. Only a write that changes operation_mode to a real mode gets through.
+        if (
+            current.operation_mode == EoliaOperationMode.KEEP_MODE
+            and changes.get("operation_mode", EoliaOperationMode.KEEP_MODE)
+            == EoliaOperationMode.KEEP_MODE
+        ):
+            if changes == {"operation_status": False}:
+                # Power off goes through /customsettings (status=false), like entering does.
+                await self._async_set_custom_settings(
+                    appliance_id, double_mode_temp_status=False
+                )
+                return
+            raise HomeAssistantError(_KEEP_MODE_ERROR)
+
         payload = current.to_control_fields()
         payload["silence_control"] = self.get_silence_control(appliance_id)
         token = self._operation_token_cache.get(appliance_id)
@@ -316,16 +377,16 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         updated[appliance_id] = new_status
         self.async_set_updated_data(updated)
 
-        # Live-confirmed 2026-09-23: MoistCooling silently downgrades to plain Cooling
-        # when requested via PUT -- 200 OK, but the returned operation_mode doesn't match
-        # what was asked, with no error code at all. Same "server accepts a request but
-        # doesn't actually apply it" class of bug already guarded against for
-        # double_mode_temp below. The one KNOWN, legitimate exception is Blast with
-        # nanoex=True, which the device deliberately combines into the NANOE wire value
-        # (see const.py's EoliaOperationMode.NANOE) -- that's not a rejection, so it's not
-        # flagged here. Only checked when the caller explicitly asked to change
-        # operation_mode this call, not when a substitution happens incidentally as a
-        # side effect of some other field (e.g. toggling nanoex while already in Blast).
+        # A requested mode can come back different with a 200 and no error code -- the same
+        # "server accepts a request but doesn't apply it" class of bug guarded against for
+        # double_mode_temp below. (MoistCooling was once seen downgrading to Cooling on
+        # 2026-09-23, but 6/6 A/B tries on 2026-09-24 accepted it from every start mode, so
+        # that is NOT a known behaviour -- this is just a general check.) The one KNOWN,
+        # legitimate exception is Blast with nanoex=True, which the device deliberately
+        # combines into the NANOE wire value (see const.py's EoliaOperationMode.NANOE).
+        # Only checked when the caller explicitly asked to change operation_mode this call,
+        # not when a substitution happens incidentally as a side effect of some other field
+        # (e.g. toggling nanoex while already in Blast).
         requested_mode = payload["operation_mode"]
         if (
             "operation_mode" in changes
@@ -351,6 +412,19 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 "The unit ignored the AI mode change -- AI isn't available in "
                 f"{new_status.operation_mode} mode."
             )
+
+        # Live-confirmed 2026-09-24 (A/B, live_captures/39): fan speed, both louvers, wind
+        # shield/hit and air flow are silently overridden when they conflict with each other
+        # or the current mode. Say why, rather than leaving the caller with a silent no-op.
+        # Only fields the caller explicitly asked for are checked -- side effects the server
+        # applies on its own (e.g. shield/hit forcing the louvers to auto) are expected.
+        ignored = [
+            f"the {label} change was ignored: {_ignore_reason(field, new_status)}"
+            for field, label in _WATCHED_FIELDS.items()
+            if field in changes and getattr(new_status, field) != changes[field]
+        ]
+        if ignored:
+            raise HomeAssistantError("; ".join(ignored))
 
     async def _async_set_custom_settings(self, appliance_id: str, **changes: Any) -> None:
         """Apply `changes` on top of the last-known .../customsettings and PUT the result.

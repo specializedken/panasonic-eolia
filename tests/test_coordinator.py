@@ -88,7 +88,14 @@ async def test_set_status_applies_only_requested_changes_on_top_of_last_known(
     coordinator, initial_status, new_status
 ):
     coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
-    coordinator.api.async_set_status.return_value = new_status
+    # The server echoes the change back (a mock that doesn't would look like an ignored one).
+    coordinator.api.async_set_status.return_value = EoliaStatus.from_dict(
+        {
+            **new_status.to_control_fields(),
+            "appliance_id": APPLIANCE_ID,
+            "wind_volume": 4,
+        }
+    )
 
     await coordinator.async_set_status(APPLIANCE_ID, wind_volume=4)
 
@@ -345,9 +352,10 @@ async def test_humidity_excluded_when_target_mode_is_not_dry(coordinator, initia
 
 
 # --- Silent operation_mode substitution/rejection ---------------------------------------
-# Live-confirmed 2026-09-23: requesting MoistCooling got silently downgraded to plain
-# Cooling -- 200 OK, no error code, but not what was asked. Same "server accepts but
-# doesn't apply" class of bug as the double_mode_temp mismatch check above.
+# A requested operation_mode can come back different with a 200 and no error code -- same
+# "server accepts but doesn't apply" class of bug as the double_mode_temp mismatch check above.
+# (MoistCooling was once seen downgrading to Cooling, but did not reproduce on 2026-09-24;
+# the tests just use it as a convenient example of a requested-vs-returned mismatch.)
 
 
 async def test_operation_mode_mismatch_raises_clear_error_and_still_caches_truth(
@@ -814,3 +822,159 @@ async def test_status_and_custom_settings_share_one_token_cache(
 
     _, custom_payload = coordinator.api.async_set_custom_settings.call_args.args
     assert custom_payload["operation_token"] == new_status.operation_token
+
+
+# --- KeepMode is a dead end for /status (live 2026-09-24, fuzz + direct probe) ---------------
+
+
+def _with(base: EoliaStatus, **fields) -> EoliaStatus:
+    return EoliaStatus.from_dict(
+        {**base.to_control_fields(), "appliance_id": APPLIANCE_ID, **fields}
+    )
+
+
+async def test_keep_mode_rejects_status_changes_without_calling_the_api(
+    coordinator, initial_status
+):
+    keep = _with(initial_status, operation_mode="KeepMode", temperature=0.0)
+    coordinator.async_set_updated_data({APPLIANCE_ID: keep})
+
+    with pytest.raises(HomeAssistantError, match="KeepMode"):
+        await coordinator.async_set_status(APPLIANCE_ID, wind_volume=3)
+
+    coordinator.api.async_set_status.assert_not_awaited()
+
+
+async def test_keep_mode_power_off_goes_through_customsettings(
+    coordinator, initial_status, initial_custom_settings
+):
+    keep = _with(initial_status, operation_mode="KeepMode", temperature=0.0)
+    coordinator.async_set_updated_data({APPLIANCE_ID: keep})
+    coordinator.custom_settings[APPLIANCE_ID] = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": True, "high": 28, "low": 23}, "peak_cut": 100}
+    )
+    coordinator.api.async_set_custom_settings.return_value = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": False, "high": 0, "low": 0}, "peak_cut": 100}
+    )
+
+    await coordinator.async_set_status(APPLIANCE_ID, operation_status=False)
+
+    coordinator.api.async_set_status.assert_not_awaited()
+    _, payload = coordinator.api.async_set_custom_settings.call_args.args
+    assert payload["double_mode_temp"]["status"] is False
+
+
+async def test_keep_mode_can_be_left_by_writing_a_real_mode(coordinator, initial_status):
+    keep = _with(initial_status, operation_mode="KeepMode", temperature=0.0)
+    coordinator.async_set_updated_data({APPLIANCE_ID: keep})
+    coordinator._temperature_cache[APPLIANCE_ID] = 22.0
+    coordinator.api.async_set_status.return_value = _with(
+        initial_status, operation_mode="Cooling", temperature=22.0
+    )
+
+    await coordinator.async_set_status(
+        APPLIANCE_ID, operation_status=True, operation_mode="Cooling"
+    )
+
+    _, payload = coordinator.api.async_set_status.call_args.args
+    # KeepMode's own 0.0 temperature must not be carried into a real-temperature mode.
+    assert payload["operation_mode"] == "Cooling"
+    assert payload["temperature"] == 22.0
+
+
+# --- Fields the server silently overrides (live 2026-09-24, A/B, live_captures/39) -----------
+
+
+@pytest.mark.parametrize(
+    ("changes", "response", "message"),
+    [
+        (  # fan is forced to auto while shield/hit is on
+            {"wind_volume": 3},
+            {"wind_shield_hit": "hit", "wind_volume": 0},
+            "keeps the fan and both louvers on auto",
+        ),
+        (  # ... and while any air_flow value is set
+            {"wind_volume": 3},
+            {"air_flow": "quiet", "wind_volume": 0},
+            "keeps the fan on auto",
+        ),
+        (
+            {"wind_direction": 3},
+            {"wind_shield_hit": "shield", "wind_direction": 0},
+            "vertical louver change was ignored: wind shield/hit is on",
+        ),
+        (
+            {"wind_direction_horizon": "wide"},
+            {"wind_shield_hit": "hit", "wind_direction_horizon": "auto"},
+            "horizontal louver change was ignored: wind shield/hit is on",
+        ),
+        (  # shield/hit is dropped in Blast and ClothesDryer
+            {"wind_shield_hit": "hit"},
+            {"operation_mode": "Blast", "wind_shield_hit": "not_set"},
+            "isn't available in Blast mode",
+        ),
+        (  # ... and loses to air_flow quiet/long
+            {"wind_shield_hit": "hit"},
+            {"air_flow": "long", "wind_shield_hit": "not_set"},
+            "conflicts with it",
+        ),
+        (  # air_flow is dropped in Dry
+            {"air_flow": "quiet"},
+            {"operation_mode": "ComfortableDehumidification", "air_flow": "not_set"},
+            "isn't available in ComfortableDehumidification mode",
+        ),
+        (
+            {"wind_volume": 3},
+            {"operation_status": False, "operation_mode": "Stop", "wind_volume": 0},
+            "off or running a cleaning mode",
+        ),
+    ],
+)
+async def test_silently_overridden_fields_raise_an_explanation(
+    coordinator, initial_status, changes, response, message
+):
+    cooling = _with(initial_status, operation_mode="Cooling", temperature=24.0)
+    coordinator.async_set_updated_data({APPLIANCE_ID: cooling})
+    coordinator.api.async_set_status.return_value = _with(cooling, **response)
+
+    with pytest.raises(HomeAssistantError, match=message):
+        await coordinator.async_set_status(APPLIANCE_ID, **changes)
+
+    # The real (overridden) state is still cached, as for the other mismatch checks.
+    assert coordinator.data[APPLIANCE_ID].operation_mode == response.get(
+        "operation_mode", "Cooling"
+    )
+
+
+async def test_honoured_changes_do_not_raise(coordinator, initial_status):
+    cooling = _with(initial_status, operation_mode="Cooling", temperature=24.0)
+    coordinator.async_set_updated_data({APPLIANCE_ID: cooling})
+    coordinator.api.async_set_status.return_value = _with(cooling, wind_volume=3)
+
+    await coordinator.async_set_status(APPLIANCE_ID, wind_volume=3)
+
+
+async def test_unrequested_server_side_effects_do_not_raise(coordinator, initial_status):
+    # Turning shield/hit on legitimately forces fan and both louvers to auto; the caller only
+    # asked for shield/hit, so that is expected behaviour, not an ignored change.
+    cooling = _with(
+        initial_status,
+        operation_mode="Cooling",
+        temperature=24.0,
+        wind_volume=3,
+        wind_direction=4,
+        wind_direction_horizon="wide",
+    )
+    coordinator.async_set_updated_data({APPLIANCE_ID: cooling})
+    forced = _with(
+        cooling,
+        wind_shield_hit="hit",
+        wind_volume=0,
+        wind_direction=0,
+        wind_direction_horizon="auto",
+    )
+    coordinator.api.async_set_status.return_value = forced
+
+    await coordinator.async_set_status(APPLIANCE_ID, wind_shield_hit="hit")
+
+    assert coordinator.data[APPLIANCE_ID] is forced

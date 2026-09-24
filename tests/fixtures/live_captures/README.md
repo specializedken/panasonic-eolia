@@ -34,6 +34,7 @@ detail — this README is just an index pointing at the headline finding of each
 | 35 | `Heating` | Confirmed. Real target temperature, same 16-30°C range as the cooling family. Closes out live confirmation of every "core" operation_mode this session set out to test. |
 | 37 | Device lockout reproduced via HA alone | During real HA integration testing, the same `E-21291-01718` lockout hit twice back-to-back with **zero other clients connected** -- Kevin confirmed this directly. Combined with 02/04 (where a separate Eolia app *was* running on an AVD the whole time, revealed afterward), proved a real second client can trigger it but isn't required. |
 | 38 | **RESOLVED**: `operation_token` confirmed as the real mechanism | Controlled A/B test via the CLI: 2 consecutive writes ~15-20s apart **succeeded** with the previous response's `operation_token` echoed back; an otherwise-identical write **failed** the usual way without it. `coordinator.py` now caches and auto-echoes this token on every `/status`/`/customsettings` write. Closes out the open question below. |
+| 39 | Random-walk fuzz + controlled A/B (2026-09-24) | See `39_fuzz_findings.md`: `KeepMode` rejects every `/status` write that carries it; `wind_shield_hit` forces fan + both louvers to auto; `air_flow` quiet/long beat shield/hit, powerful coexists; **temperature step is 0.5C**; `MoistCooling` does not downgrade; the vane "one-way door" was really shield/hit. |
 
 ## Open questions still unresolved
 
@@ -47,9 +48,9 @@ detail — this README is just an index pointing at the headline finding of each
   `operation_mode` values (SmellCare, NanoexCleaning, AutoTempControl, KeepHeating,
   Auto) — none of those tested yet (`Blast`/`Heating`/`ClothesDryer`/`ComfortableDehumidification`
   now confirmed).
-- Whether horizontal `wind_direction_horizon=auto` has the same "API can enter but not
-  leave" asymmetry the vertical axis has (see 15/18) — not yet tested (would need a
-  fixed-position write while horizontal auto is active).
+- ~~Whether horizontal `wind_direction_horizon=auto` has the same "API can enter but not
+  leave" asymmetry the vertical axis has~~ — **RESOLVED**, see 39: neither axis has it; both are
+  only locked to auto while `wind_shield_hit` is on.
 - ~~The real mechanism behind the `E-21291-01718` ~2-minute lockout~~ — **RESOLVED**, see
   38: it's `operation_token` continuity, not really "another device". Now handled
   automatically by `coordinator.py`. Still open: whether `/status` and `/customsettings`

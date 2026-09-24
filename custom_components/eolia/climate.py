@@ -28,8 +28,8 @@ from .const import (
     CLEAN_FAMILY_MODES,
     NO_TARGET_TEMPERATURE_MODES,
     OPERATION_MODE_FUNCTION_IDS,
-    PROVISIONAL_TEMPERATURE_STEP,
     TARGET_TEMPERATURE_RANGE,
+    TEMPERATURE_STEP,
     WIND_DIRECTION_LEVELS,
     WIND_VOLUME_LEVELS,
     EoliaOperationMode,
@@ -135,7 +135,7 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
     # `_attr_name = None` above always wins over any translation-key-driven naming.
     _attr_translation_key = "eolia"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_target_temperature_step = PROVISIONAL_TEMPERATURE_STEP
+    _attr_target_temperature_step = TEMPERATURE_STEP
     _attr_min_temp = TARGET_TEMPERATURE_RANGE[0]
     _attr_max_temp = TARGET_TEMPERATURE_RANGE[1]
     _attr_hvac_modes = [
@@ -291,9 +291,9 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
                     else "temperature is fixed/automatic in this mode."
                 )
             )
-        await self.coordinator.async_set_status(
-            self._appliance_id, temperature=float(temperature)
-        )
+        # The server only accepts a 0.5C grid (off-grid values get E-21291-01712).
+        snapped = round(float(temperature) / TEMPERATURE_STEP) * TEMPERATURE_STEP
+        await self.coordinator.async_set_status(self._appliance_id, temperature=snapped)
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         self._require_powered_on("change the fan speed")
@@ -315,6 +315,13 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
 
     async def async_turn_on(self) -> None:
         status = self._status
+        if (
+            status is not None
+            and status.operation_status
+            and status.operation_mode == EoliaOperationMode.KEEP_MODE
+        ):
+            # Already on. Any /status write is rejected while in KeepMode (see coordinator).
+            return
         if status is not None and status.operation_mode in (
             EoliaOperationMode.STOP,
             EoliaOperationMode.OTHER,

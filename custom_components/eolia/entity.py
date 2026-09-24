@@ -40,19 +40,18 @@ class EoliaEntity(CoordinatorEntity[EoliaDataUpdateCoordinator]):
         return super().available and self._status is not None
 
     def _require_powered_on(self, action: str) -> None:
-        """Raise a clear error instead of letting the server's opaque one through.
+        """Raise a clear error instead of sending a write that goes nowhere.
 
-        Live-confirmed 2026-09-23 via the real HA integration: the API rejects ANY
-        /status field change (temperature, fan, swing, nanoex, ai_control, ... --
-        every one tried) while `operation_status` is False (unit off), with a generic,
-        unhelpful E-21291-01711 ("an application error occurred"). `preset_mode`/
-        `hvac_mode` on the climate entity sidestep this by forcing
-        `operation_status=True` alongside their own change (mirroring how the
-        physical remote/app work: picking a mode turns the unit on); every other
-        control (temperature, fan/swing on climate; the select entities; the
-        EoliaStatus-backed switches) has no mode of its own to piggyback that on, so
-        they call this instead of also implicitly powering the unit on as a
-        surprising side effect.
+        A /status write with a real operation_mode carried is accepted while the unit is off
+        but mostly not applied (louvers read back parked, fan/temperature don't take effect;
+        fuzz 2026-09-24, live_captures/39). The opaque E-21291-01711 first seen here on
+        2026-09-23 was really the carried `Stop` operation_mode being rejected, not the off
+        state. `preset_mode`/`hvac_mode` on the climate entity sidestep this by forcing
+        `operation_status=True` alongside their own change (mirroring how the physical
+        remote/app work: picking a mode turns the unit on); every other control (temperature,
+        fan/swing on climate; the select entities; the EoliaStatus-backed switches) has no
+        mode of its own to piggyback that on, so they call this instead of also implicitly
+        powering the unit on as a surprising side effect.
         """
         status = self._status
         if status is not None and not status.operation_status:

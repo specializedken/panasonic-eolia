@@ -189,7 +189,7 @@ this repo as a design doc if that plan file isn't available in a future session)
 - **Provisional/unconfirmed values, updated 2026-09-23 (most are now resolved — see the big
   update below)**: `wind_volume`/`wind_direction` ranges are now **fully live-confirmed**
   (`wind_volume`: 0=auto/1=min/5=max; `wind_direction`: 0=auto/1-5=fixed positions/6=swing).
-  Still open: temperature step (guessed `1.0°C`, not yet disambiguated from 0.5°C), and the
+  (Temperature step: **resolved 2026-09-24 → 0.5°C**, see the fuzz update below.) Still open: the
   `hvac_mode` bucket table for the less common `operation_mode` values (SmellCare,
   NanoexCleaning, AutoTempControl, etc. — still bucketed by best guess, not yet confirmed
   against real device behavior; `KeepMode` specifically *is* now confirmed → `AUTO`).
@@ -348,7 +348,9 @@ this repo as a design doc if that plan file isn't available in a future session)
     toggle on (confirmed by writing it from a fixed position and watching the app's toggle
     flip). Combined with the earlier finding, the full picture is: the API can always
     *enter* auto, but can never *leave* it (a `1`-`5` write while already at `0` stays
-    silently inert) — only the app's own toggle can turn auto off.
+    silently inert) — only the app's own toggle can turn auto off. **CORRECTED 2026-09-24**:
+    that "inert" behaviour was `wind_shield_hit` being on, not vertical auto itself -- with
+    shield/hit off, a fixed position leaves auto fine (see the fuzz update below).
   - **Major finding: `ComfortableDehumidification` ("Dry") requires `humidity` in the PUT
     body — the one exception to the "always exclude humidity" rule** documented back at
     project start. Also requires `temperature=0.0` (a real value like `24.0` is rejected
@@ -435,7 +437,8 @@ this repo as a design doc if that plan file isn't available in a future session)
     `EoliaOperationMode`/`_HVAC_MODE_BUCKETS` (buckets to `FAN_ONLY`, like `Blast`) but
     deliberately left out of the settable preset list -- it's only reachable by picking
     `Blast` and toggling the nanoeX switch, not directly.
-  - **`MoistCooling` confirmed to silently downgrade to plain `Cooling`.** Unlike
+  - **`MoistCooling` was seen silently downgrading to plain `Cooling` (NOT reproduced
+    2026-09-24: 6/6 A/B tries accepted it -- see the fuzz update below).** Unlike
     `KeepHeating`, this doesn't error at all -- `200 OK`, but the returned
     `operation_mode` doesn't match what was requested, exactly the same "server accepts
     but doesn't actually apply it" class of bug already guarded against for
@@ -474,8 +477,8 @@ this repo as a design doc if that plan file isn't available in a future session)
     `ventilation`, `good_sleep_control`, `zone` are all **false**, matching every live
     rejection; `smell_care`, `cleaning`, `nanoex_cleaning`, `blast`, `clothes_dryer`,
     `comfortable_dehumidification`, `moist_cooling` are true. `KeepHeating` has no flag in
-    the list, so its rejection is still unexplained; `MoistCooling` is flagged true yet
-    silently downgrades to `Cooling`, also unexplained. Implemented: `api.async_get_functions`,
+    the list, so its rejection is still unexplained; `MoistCooling` is flagged true (and was
+    accepted normally in the 2026-09-24 A/B run). Implemented: `api.async_get_functions`,
     `coordinator.functions`/`supports()` (fetched once, non-fatal, unknown = allow),
     `const.OPERATION_MODE_FUNCTION_IDS`; `climate.preset_modes` is now filtered per model,
     and the air-quality switch is only created if the model has `airquality`. The
@@ -549,11 +552,53 @@ this repo as a design doc if that plan file isn't available in a future session)
   (coordinator `supports()`) say which controls a model has. Open design questions: one card
   vs several, and where the JS and icons get served from in Kevin's HA. Number entities
   fire one write per click, so the card should debounce (writes take ~3s each).
+- **Update, 2026-09-24 — random-walk fuzzing + controlled A/B tests on the real unit, several
+  old findings corrected, and real guards added.** Asked to "generate lots of random actions
+  and state changes to find which are impossible", built three tools (all in `tools/`):
+  `eolia_fuzz.py` (random walk: GET -> random 1-3 field change -> read-modify-write PUT ->
+  classify ok / modified / rejected, JSONL logs in gitignored `fuzz_runs/`, chains
+  `operation_token`, restores the starting state; `--raw`/`--wild` modes exist but weren't run),
+  `eolia_fuzz_report.py` (mines the logs), and `eolia_ab.py` (controlled one-change-at-a-time
+  experiments from an explicit baseline) plus `eolia_keepmode_probe.py`. ~280 real writes, 1
+  lockout total. Full write-up with sample counts: `tests/fixtures/live_captures/39_fuzz_findings.md`
+  -- read it before touching any of the rules below. Headline: with the known rules applied,
+  `/status` almost never *rejects* anything; the "impossible" combinations are the server
+  answering 200 and silently overriding fields.
+  - **`KeepMode` is a `/status` dead end.** Every `/status` write that carries `KeepMode` back
+    is rejected `E-21291-01711` (fan, louvers, nanoeX, AI, temperature, even power-off);
+    omitting `operation_mode` gives new `E-21291-01703`. Only a write that changes
+    `operation_mode` to a real mode (with a real temperature) gets through, and power-off has
+    to go through `/customsettings status=false`. **Implemented**: `coordinator` raises a clear
+    error for any other write in `KeepMode`, routes a bare power-off through
+    `/customsettings`, and `climate.turn_on` is a no-op while already in `KeepMode`.
+  - **`wind_shield_hit` is an "everything auto" mode.** While `shield`/`hit` is on the server
+    forces fan speed, vertical louver and horizontal louver to auto and ignores writes to them
+    (they can be set again as soon as it's off, even in the same write). `air_flow` `quiet`/
+    `long` conflicts with it (`air_flow` wins, in every order); `powerful` coexists. It's
+    dropped in `Blast` and `ClothesDryer`; `air_flow` is dropped in Dry/`Blast`/`ClothesDryer`.
+    Fan speed is only honoured while `air_flow` and shield/hit are both off. **Implemented**:
+    `coordinator` compares the response with the requested fan/louver/shield-hit/air-flow
+    values and raises an error that says *why* (constants in `const.py`); side effects the
+    caller didn't ask for (shield/hit forcing the louvers to auto) are deliberately not flagged.
+  - **Corrections**: temperature step is **0.5°C** (24.5/16.5/29.5 accepted in four modes,
+    off-grid 25.3 rejected `E-21291-01712`) -- `PROVISIONAL_TEMPERATURE_STEP = 1.0` is now
+    `TEMPERATURE_STEP = 0.5` and `climate.async_set_temperature` snaps to that grid;
+    `MoistCooling` does **not** downgrade (see above); the vertical vane is **not** a one-way
+    door (it was shield/hit, see above).
+  - **Writes while the unit is off**: with a real mode carried instead of `Stop`, a write while
+    off is *accepted* (17/17) but mostly not applied (louvers read back parked, `nanoex` sticks).
+    The "rejected while off" behaviour was the carried `Stop` mode, not the off state itself.
+    `_require_powered_on` is kept (writes go nowhere), only its docstring was corrected.
+  - 227 tests now (up from 207): coordinator `KeepMode` guard, each ignored-field explanation,
+    the honoured/unrequested-side-effect no-raise cases, 0.5 step + snapping, `turn_on`/
+    `turn_off` in `KeepMode`. Existing tests whose mocked PUT response didn't echo the request
+    were fixed to echo it (an unchanged response now correctly reads as an ignored write).
+  - **Not done**: `--raw`/`--wild` fuzz passes, `peak_cut`, `timer_value`, other models.
 - **Known gaps, deliberately left**: changing settings during a clean-family mode (the "AC is
-  off" guard still fires), louvers in `KeepMode`, `air_flow`/shield-hit in the clean modes,
+  off" guard still fires), `air_flow`/shield-hit in the clean modes,
   `CoolDehumidifying` through HA (CLI-confirmed only), `KeepHeating` (rejected, no flag
-  explains it), `MoistCooling` (flagged supported but downgrades to `Cooling`), Kevin's
-  unexplained 14:06 power-on, the 0.5 vs 1.0C temperature step, token refresh after 14 days,
+  explains it), Kevin's
+  unexplained 14:06 power-on, token refresh after 14 days,
   and multiple devices/models (capability gating is only proven on CS-712DX2-W).
 
 ## How to leave notes for next time

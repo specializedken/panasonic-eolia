@@ -163,6 +163,12 @@ def coordinator(hass, device) -> EoliaDataUpdateCoordinator:
     return EoliaDataUpdateCoordinator(hass, AsyncMock(), [device])
 
 
+def _echo_payload(appliance_id: str, payload: dict) -> EoliaStatus:
+    """Mock PUT response that applies the request as sent, like the real server does when
+    nothing conflicts (a mock that returns an unchanged status looks like an ignored write)."""
+    return EoliaStatus.from_dict({**payload, "appliance_id": appliance_id})
+
+
 def _status(*, operation_status: bool) -> EoliaStatus:
     return EoliaStatus.from_dict(
         {"appliance_id": APPLIANCE_ID, "operation_status": operation_status}
@@ -201,7 +207,7 @@ async def test_sub_setting_changes_raise_clear_error_when_off(
 )
 async def test_sub_setting_changes_proceed_when_on(coordinator, method, kwargs):
     coordinator.async_set_updated_data({APPLIANCE_ID: _status(operation_status=True)})
-    coordinator.api.async_set_status.return_value = _status(operation_status=True)
+    coordinator.api.async_set_status.side_effect = _echo_payload
     entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
 
     await getattr(entity, method)(**kwargs)
@@ -386,3 +392,58 @@ async def test_bare_power_on_with_no_history_falls_back_to_auto(coordinator):
     coordinator.async_set_status.assert_awaited_once_with(
         APPLIANCE_ID, operation_status=True, operation_mode="Auto"
     )
+
+
+# --- 0.5C temperature step (live 2026-09-24) and KeepMode handling ----------------------------
+
+
+def test_temperature_step_is_half_a_degree(coordinator):
+    assert EoliaClimateEntity(coordinator, APPLIANCE_ID).target_temperature_step == 0.5
+
+
+@pytest.mark.parametrize(
+    ("requested", "sent"), [(24.0, 24.0), (24.5, 24.5), (24.3, 24.5), (24.2, 24.0)]
+)
+async def test_set_temperature_snaps_to_the_half_degree_grid(coordinator, requested, sent):
+    # Off-grid values (e.g. 25.3) are rejected by the server with E-21291-01712.
+    coordinator.async_set_updated_data(
+        {APPLIANCE_ID: _status_in_mode(EoliaOperationMode.COOLING)}
+    )
+    coordinator.async_set_status = AsyncMock()
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_set_temperature(**{ATTR_TEMPERATURE: requested})
+
+    coordinator.async_set_status.assert_awaited_once_with(APPLIANCE_ID, temperature=sent)
+
+
+async def test_turn_on_while_already_in_keep_mode_is_a_no_op(coordinator):
+    coordinator.async_set_updated_data(
+        {APPLIANCE_ID: _status_in_mode(EoliaOperationMode.KEEP_MODE)}
+    )
+    coordinator.async_set_status = AsyncMock()
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_turn_on()
+
+    coordinator.async_set_status.assert_not_awaited()
+
+
+async def test_turn_off_in_keep_mode_disables_the_double_temperature_setting(coordinator):
+    from custom_components.eolia.models import EoliaCustomSettings
+
+    coordinator.async_set_updated_data(
+        {APPLIANCE_ID: _status_in_mode(EoliaOperationMode.KEEP_MODE)}
+    )
+    coordinator.custom_settings[APPLIANCE_ID] = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": True, "high": 28, "low": 23}, "peak_cut": 100}
+    )
+    coordinator.api.async_set_custom_settings.return_value = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": False, "high": 0, "low": 0}, "peak_cut": 100}
+    )
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_turn_off()
+
+    coordinator.api.async_set_status.assert_not_awaited()
+    coordinator.api.async_set_custom_settings.assert_awaited_once()

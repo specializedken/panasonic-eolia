@@ -559,3 +559,23 @@ code-for-token exchange by hand with `curl`. This gets a real access+refresh tok
 touching an emulator at all. Only fall back to full Track 2 if this doesn't work (e.g. if the
 tenant validates `redirect_uri` strictly against a registered native scheme in a way that
 blocks inspecting it, or if there's bot/device-fingerprint detection on the `/authorize` page).
+
+## 2026-09-24 — fuzzing + A/B: cross-field rules
+
+Full data and sample counts in `tests/fixtures/live_captures/39_fuzz_findings.md`; summary:
+
+- **`KeepMode`**: every `/status` PUT that carries `operation_mode: KeepMode` back is rejected
+  `E-21291-01711` (including `operation_status: false`); omitting `operation_mode` gives
+  `E-21291-01703`; `operation_mode` -> a real mode with a real temperature works. Power-off is
+  `/customsettings` `double_mode_temp.status=false`.
+- **`wind_shield_hit` (`shield`/`hit`)** forces `wind_volume=0`, `wind_direction=0` and
+  `wind_direction_horizon="auto"`, and those fields ignore writes while it is on. `air_flow`
+  `quiet`/`long` conflicts with it and wins; `powerful` coexists. Dropped in `Blast`/
+  `ClothesDryer`. `air_flow` is dropped in Dry/`Blast`/`ClothesDryer`. `wind_volume` is only
+  honoured while `air_flow == not_set` and shield/hit is off.
+- **Temperature grid is 0.5C** over 16-30 (`25.3` -> `E-21291-01712`).
+- **`MoistCooling`** is accepted as-is from every start mode (no downgrade).
+- **Corrects earlier notes**: the vertical/horizontal louvers are not "one-way doors" — they were
+  locked by shield/hit. Writes while the unit is off with a real mode carried are accepted (not
+  rejected), just mostly not applied; the earlier rejection was the carried `Stop` mode.
+

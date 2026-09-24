@@ -305,22 +305,18 @@ WIND_VOLUME_LEVELS = (0, 1, 2, 3, 4, 5)  # 0 = auto
 # and 5 individually confirmed; 2 and 4 inferred by pattern -- and confirmed as GOOD
 # inferred values, since writing 2 directly worked and was confirmed in the app),
 # 6=swing/oscillate (NOT part of the linear position scale -- a distinct
-# continuous-motion mode). Entering/leaving each state via the API is ASYMMETRIC, both
-# confirmed live: writing 0 always works and puts the unit into auto (confirmed by
-# writing it while in a fixed position and seeing the app's auto toggle turn on);
-# writing 1-5 works when starting from a fixed position OR from swing (6) -- a
-# fixed-position write immediately overrides swing. But writing 1-5 while the unit is
-# ALREADY in auto (0) is silently ignored: /status keeps reporting 0 regardless of what
-# was sent, and the write is not lost (it becomes visible once auto is turned off), just
-# inert until then. No API field to turn auto OFF has been found -- only the app's own
-# vertical-auto toggle does that; the API can freely enter auto but not leave it. See
-# tests/fixtures/live_captures/07 and 15 for the full investigation.
+# continuous-motion mode). CORRECTED 2026-09-24 (A/B, live_captures/39): writing 0 puts the
+# unit into auto and writing 1-5 leaves it again, and a fixed-position write overrides swing
+# (6) -- BUT only while wind_shield_hit is off. While shield/hit is on, the server forces this
+# to 0 and ignores writes to it (that, not "vertical auto" itself, was the earlier "the API
+# can enter auto but never leave it" observation from captures 07/15/18).
 WIND_DIRECTION_LEVELS = (0, 1, 2, 3, 4, 5, 6)
 WIND_DIRECTION_SWING = 6
 
-# Temperature step is unconfirmed (the single live capture, 20.0, doesn't disambiguate
-# 0.5 vs 1.0 steps). Default to whole degrees; validate on first live control test.
-PROVISIONAL_TEMPERATURE_STEP = 1.0
+# Live-confirmed 2026-09-24 (tests/fixtures/live_captures/39, A/B): the server accepts 0.5C
+# steps (24.5, 16.5 and 29.5 all worked in Cooling/Heating/CoolDehumidifying/Auto) and
+# rejects off-grid values like 25.3 with E-21291-01712.
+TEMPERATURE_STEP = 0.5
 
 # Live-confirmed for Cooling/CoolDehumidifying/MoistCooling/Heating (the app UI and the
 # server both use 16-30C). HA's climate default is 7-35C, and a 35.0 write was rejected
@@ -405,3 +401,27 @@ DOUBLE_MODE_TEMP_LOW_RANGE = (16, 25)
 # tests/fixtures/live_captures/19-24 for the full trial-and-error sequence.
 DRY_MODE_HUMIDITY_RANGE = (50, 60)
 DRY_MODE_HUMIDITY_STEP = 5
+
+# --- Cross-field exclusion rules (live-confirmed 2026-09-24, A/B, live_captures/39) ----------
+# The server answers 200 but silently overrides fields that conflict; coordinator.py compares
+# the response with what was asked and explains the override instead of showing a no-op.
+#
+# wind_shield_hit ("shield"/"hit") is an all-auto mode: while it's on, fan speed, the vertical
+# louver and the horizontal louver are all forced to auto (0 / 0 / "auto") and writes to them
+# are ignored; they can be set again as soon as it's off. Fan speed is likewise only honoured
+# while air_flow is "not_set" too.
+NOT_SET = "not_set"
+# Modes that always drop wind_shield_hit back to "not_set".
+SHIELD_HIT_UNSUPPORTED_MODES = (
+    EoliaOperationMode.BLAST,
+    EoliaOperationMode.CLOTHES_DRYER,
+)
+# air_flow values that conflict with shield/hit (air_flow wins, in every order). "powerful"
+# coexists with it.
+AIR_FLOW_CONFLICTING_WITH_SHIELD_HIT = ("quiet", "long")
+# Modes that always drop air_flow back to "not_set".
+AIR_FLOW_UNSUPPORTED_MODES = (
+    EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION,
+    EoliaOperationMode.BLAST,
+    EoliaOperationMode.CLOTHES_DRYER,
+)
