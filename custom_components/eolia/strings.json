@@ -125,6 +125,30 @@
       }
     },
     "sensor": {
+      "operation_mode": {
+        "name": "Operation mode",
+        "state": {
+          "Auto": "Auto",
+          "Cooling": "Cooling",
+          "Heating": "Heating",
+          "KeepHeating": "Heating (continuous fan)",
+          "Blast": "Fan only",
+          "Nanoe": "Fan only (nanoeX)",
+          "Dehumidifying": "Dehumidify",
+          "CoolDehumidifying": "Cool & Dehumidify",
+          "ComfortableDehumidification": "Dry (comfort dehumidify)",
+          "ClothesDryer": "Clothes drying",
+          "MoistCooling": "Moist cooling",
+          "AutoTempControl": "Auto temperature",
+          "KeepMode": "Double temperature",
+          "SmellCare": "Odor care",
+          "SmellCareSpot": "Odor care (spot)",
+          "NanoexCleaning": "Away clean (nanoeX)",
+          "Cleaning": "Self-clean",
+          "Stop": "Stop",
+          "Other": "Other"
+        }
+      },
       "indoor_temperature": { "name": "Indoor temperature" },
       "outdoor_temperature": { "name": "Outdoor temperature" },
       "indoor_humidity": { "name": "Indoor humidity" },

@@ -182,6 +182,59 @@ OPERATION_MODE_DESCRIPTIONS: dict[str, str] = {
 }
 
 
+# User-facing tooltips for the mode picker (shown on hover by the Lovelace card, delivered via
+# the operation_mode sensor's `mode_descriptions` attribute so the card holds no copy of its own).
+# Deliberately plain English with no error codes or Japanese labels -- the developer notes live
+# in OPERATION_MODE_DESCRIPTIONS above; the facts here come from the same sources and live
+# captures. `Stop` and `Other` are never shown in the picker.
+OPERATION_MODE_TOOLTIPS: dict[str, str] = {
+    "Auto": "Picks cooling, heating or fan automatically to reach the target temperature.",
+    "Cooling": "Standard cooling to a target temperature (16-30\u00b0C).",
+    "Heating": "Standard heating to a target temperature.",
+    "KeepHeating": (
+        "Heating with the fan kept running, so no cool air is blown while the unit warms up. "
+        "Not available on every model."
+    ),
+    "Blast": (
+        "Fan only: circulates air without cooling, heating or dehumidifying. "
+        "There is no temperature target."
+    ),
+    "Nanoe": "Fan only with nanoeX on. Pick Fan only and switch nanoeX on to get here.",
+    "Dehumidifying": (
+        "Dehumidifies while reheating the air so the room doesn't get colder. "
+        "Only on models with reheat dehumidification."
+    ),
+    "CoolDehumidifying": (
+        "Cool & Dehumidify: lowers both temperature and humidity. You set a target "
+        "temperature (16-30\u00b0C). Colder and stronger than Dry."
+    ),
+    "ComfortableDehumidification": (
+        "Dry: lowers humidity with minimal cooling, so the room doesn't get cold. "
+        "You set a humidity target (50-60%) instead of a temperature."
+    ),
+    "ClothesDryer": (
+        "Clothes drying: strong dehumidifying plus fan for laundry hung indoors. "
+        "Temperature is automatic. Best used when the room is empty."
+    ),
+    "MoistCooling": (
+        "Moist cooling: cools while keeping more humidity than plain cooling, to avoid a dry, "
+        "chilly feel. You set a target temperature."
+    ),
+    "AutoTempControl": (
+        "Auto temperature control: adjusts the target using the outdoor temperature. "
+        "Not available on every model."
+    ),
+    "KeepMode": (
+        "Double temperature: keeps the room between a low and a high temperature "
+        "(at least 5\u00b0C apart) instead of holding a single target."
+    ),
+    "SmellCare": "Odor care: runs a deodorizing cycle.",
+    "SmellCareSpot": "Spot odor care: deodorizes a targeted area rather than the whole room.",
+    "NanoexCleaning": "Away clean: a nanoeX cleaning cycle for when nobody is home.",
+    "Cleaning": "Self-clean: runs the unit's internal cleaning cycle.",
+}
+
+
 # --- ai_control enum (wire values) ------------------------------------------------------
 # AI mode / ECONAVI are NOT independently toggleable in this API -- ECONAVI is a third
 # state of the same field alongside AI-comfort-mode. See findings.md.
@@ -423,5 +476,13 @@ AIR_FLOW_CONFLICTING_WITH_SHIELD_HIT = ("quiet", "long")
 AIR_FLOW_UNSUPPORTED_MODES = (
     EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION,
     EoliaOperationMode.BLAST,
+    EoliaOperationMode.CLOTHES_DRYER,
+)
+# Modes that always revert ai_control to "off" (200 OK, silently; live-confirmed 2026-09-23 for
+# Blast/ClothesDryer, and Nanoe reads back like Blast). Dry stores it. The coordinator only
+# checks this after the fact; controls.py uses it to say up front that AI doesn't apply.
+AI_UNSUPPORTED_MODES = (
+    EoliaOperationMode.BLAST,
+    EoliaOperationMode.NANOE,
     EoliaOperationMode.CLOTHES_DRYER,
 )

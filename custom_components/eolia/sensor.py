@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -23,6 +24,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from . import EoliaConfigEntry
+from .const import OPERATION_MODE_TOOLTIPS, EoliaOperationMode
+from .controls import applicable_controls
 from .coordinator import EoliaDataUpdateCoordinator
 from .entity import EoliaEntity
 from .models import EoliaStatus
@@ -33,9 +36,40 @@ class EoliaSensorEntityDescription(SensorEntityDescription):
     """Describes an Eolia sensor entity."""
 
     value_fn: Callable[[EoliaStatus], StateType]
+    attrs_fn: Callable[[EoliaStatus], dict[str, Any]] | None = None
+
+
+def _operation_mode(status: EoliaStatus) -> str:
+    """The raw wire `operation_mode`, with unknown values folded into `Other`.
+
+    An ENUM sensor raises if its state isn't one of `options`, and the server can return
+    modes this integration has never seen (models.py just passes the string through).
+    """
+    try:
+        return EoliaOperationMode(status.operation_mode).value
+    except ValueError:
+        return EoliaOperationMode.OTHER.value
 
 
 SENSOR_DESCRIPTIONS: tuple[EoliaSensorEntityDescription, ...] = (
+    # The exact operation_mode, not climate's coarse hvac_mode bucket -- exists so
+    # dashboards can show/hide mode-dependent controls with plain `state` conditions
+    # (Dry vs Cool & Dehumidify, KeepMode, the clean family, Nanoe... all look the same
+    # to hvac_mode). Reports `Stop` while off, and the clean family while they run with
+    # operation_status false, exactly as the server does.
+    EoliaSensorEntityDescription(
+        key="operation_mode",
+        translation_key="operation_mode",
+        device_class=SensorDeviceClass.ENUM,
+        options=[mode.value for mode in EoliaOperationMode],
+        value_fn=_operation_mode,
+        # Which controls currently do anything (controls.py) plus the picker's tooltip text;
+        # the Lovelace card renders from these and holds no rules or copy of its own.
+        attrs_fn=lambda status: {
+            "controls": list(applicable_controls(status)),
+            "mode_descriptions": OPERATION_MODE_TOOLTIPS,
+        },
+    ),
     EoliaSensorEntityDescription(
         key="inside_temp",
         translation_key="indoor_temperature",
@@ -97,6 +131,8 @@ class EoliaSensor(EoliaEntity, SensorEntity):
     """A single read-only Eolia status field."""
 
     entity_description: EoliaSensorEntityDescription
+    # Static text that never changes; no reason to store it with every state change.
+    _unrecorded_attributes = frozenset({"mode_descriptions"})
 
     def __init__(
         self,
@@ -114,3 +150,11 @@ class EoliaSensor(EoliaEntity, SensorEntity):
         if status is None:
             return None
         return self.entity_description.value_fn(status)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        status = self._status
+        attrs_fn = self.entity_description.attrs_fn
+        if status is None or attrs_fn is None:
+            return None
+        return attrs_fn(status)

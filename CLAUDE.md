@@ -549,9 +549,11 @@ this repo as a design doc if that plan file isn't available in a future session)
   isn't available in Blast/ClothesDryer). Icons are extractable with
   `python tools/extract_icons.py` into a gitignored `icons/` (Panasonic's artwork: local use
   only, never commit or publish). The per-model `GET /products/{code}/functions` flags
-  (coordinator `supports()`) say which controls a model has. Open design questions: one card
-  vs several, and where the JS and icons get served from in Kevin's HA. Number entities
-  fire one write per click, so the card should debounce (writes take ~3s each).
+  (coordinator `supports()`) say which controls a model has. Design questions answered
+  2026-09-24: one card, served from the integration itself (see the "Lovelace card" update
+  below); icons are not used. (Original note: number entities fire one write per click, so
+  the card should debounce -- writes take ~3s each. Unverified: the card uses stock `entities`
+  rows, whose sliders should write on release rather than per click; check when testing.)
 - **Update, 2026-09-24 — random-walk fuzzing + controlled A/B tests on the real unit, several
   old findings corrected, and real guards added.** Asked to "generate lots of random actions
   and state changes to find which are impossible", built three tools (all in `tools/`):
@@ -594,8 +596,101 @@ this repo as a design doc if that plan file isn't available in a future session)
     `turn_off` in `KeepMode`. Existing tests whose mocked PUT response didn't echo the request
     were fixed to echo it (an unchanged response now correctly reads as an ignored write).
   - **Not done**: `--raw`/`--wild` fuzz passes, `peak_cut`, `timer_value`, other models.
-- **Known gaps, deliberately left**: changing settings during a clean-family mode (the "AC is
-  off" guard still fires), `air_flow`/shield-hit in the clean modes,
+- **Update, 2026-09-24 — the Lovelace card (`custom:eolia-card`) built and deployed to europa.**
+  Kevin's requirement: hide controls that don't apply to the current mode, and be
+  **distributable** (no hardcoded entity ids -- they depend on the device nickname *and* the
+  area, e.g. europa has `sensor.yurt_*` but the new sensor registered as
+  `sensor.living_room_yurt_operation_mode`). Researched first: stock conditional cards can only
+  test an entity's *state* (attribute conditions are still an open frontend feature request), a
+  2026.5 dashboard-strategy API exists but is thinly documented and generates whole dashboards,
+  so: **one custom card shipped inside the integration.**
+  - **Config is just** `type: custom:eolia-card` + `entity: climate.<yours>`. The card finds the
+    device's other entities from `hass.entities` (same `device_id`, matched by
+    `translation_key` -- both fields confirmed present in europa's frontend bundle), so no
+    entity id is ever written down. Custom setpoint stepper, mode picker and airflow rows plus
+    stock `entities` / `glance` cards (see the 0.4.0 update below). `www/eolia-card.js`, plain
+    JS, no build step.
+  - **Served by the integration** (`frontend.py`): `async_register_static_paths` for
+    `/eolia_static/eolia-card.js` plus `add_extra_js_url` with `?v=<manifest version>` for cache
+    busting -- **bump `manifest.json`'s `version` whenever the JS changes** or browsers keep the
+    old file. Chosen over a Lovelace-resource entry because it works in both storage and YAML
+    dashboard modes and can't create duplicate resources. `manifest.json` now depends on
+    `frontend` and `http`; registration happens once in `async_setup`.
+  - **The "what applies now" rules live in Python only** (`controls.py`,
+    `applicable_controls(status)`, unit-tested in `tests/test_controls.py`) and reach the card as
+    the `controls` attribute of the new `sensor.<device>_operation_mode` (an ENUM sensor
+    exposing the raw `operation_mode`; unknown server values fold into `Other`). The card holds
+    **no rules**, so it can't drift from `const.py`. If you learn a new rule, change
+    `controls.py` + its tests, not the JS. Ids are entity `translation_key`s, plus
+    `temperature`/`fan`/`louvers` for the climate tile's features. Current rules: `KeepMode` ->
+    only the double-temp switch + low/high (it's a `/status` dead end); off or clean family ->
+    only the double-temp switch; no `temperature` in Dry/ClothesDryer; `ai_mode` dropped in
+    Blast/Nanoe/ClothesDryer; `air_flow` dropped in Dry/Blast/Nanoe/ClothesDryer;
+    `wind_shield_hit` dropped in Blast/Nanoe/ClothesDryer; shield/hit on hides fan + louvers;
+    any non-`not_set` `air_flow` hides fan; `dry_humidity_target` Dry only. (Nanoe follows Blast's
+    rules -- assumed from "Nanoe = Blast + nanoeX", only AI is live-confirmed for it.) If the
+    attribute is missing (older integration) the card shows everything rather than nothing.
+    New const: `AI_UNSUPPORTED_MODES`.
+  - **Tested**: `tests/test_controls.py`, `tests/test_frontend.py`, sensor tests (Python), and
+    `tests/js/eolia-card.test.mjs` (`node --test tests/js/`) which runs the real card file
+    against a fake DOM/`hass` (entity discovery across devices, rendering from `controls`,
+    reconfigure-not-recreate, missing-attribute fallback). 252 Python tests + 31 JS tests.
+    Kevin has looked at it rendered (feedback drove the 0.4.0 layout below); there is no
+    headless browser on europa, so layout/CSS is only ever checked by eye -- the JS tests cover
+    logic, not appearance. Hard-refresh after a deploy (companion app needs a cache clear).
+  - **Deployment gotcha found on the way**: europa's running integration had been left on an
+    older `coordinator.py`/`climate.py`/`const.py`/`entity.py` than HEAD (a commit landed after
+    the last `docker cp`). It was redeployed from the working tree this session. After any
+    commit that changes integration code, remember `docker cp custom_components/eolia/.
+    homeassistant:/config/custom_components/eolia/` + `docker restart homeassistant`.
+  - **Panasonic icons (2026-09-24, card 0.3.0) -- a mode picker like the app's.** Stock HA rows
+    can only show mdi icons, so the card has one custom piece: a grid of mode buttons (replaced
+    the tile's preset dropdown) calling `climate.set_preset_mode`, with the app's own accent
+    colours. Icons come from `<icons>/modes/<name>.png`, default `icons: /local/eolia-icons` (=
+    HA's `/config/www/eolia-icons/`); `icons: false` disables them. **The icons are Panasonic's
+    artwork, so they are NOT in the repo or the integration** -- each user copies their own with
+    `python tools/extract_icons.py` (needs the local decompiled `code/`), then copies the
+    `modes/` folder into HA's `www/eolia-icons/`. On europa that was done with `docker cp` of
+    the 8 files the card references (`v6_drive_mode_{automatic,blower,cleaning,clothes_drying,
+    dehumidity,moist_cooling,nanoex,smell_care}.png`). A mode with no app icon, or whose file is
+    missing (`<img onerror>`), falls back to a tinted mdi icon, so the card is fully usable
+    without them. The app has **no icon for Cooling, Heating, Cool & Dehumidify or KeepMode**
+    (those use mdi with the app's accent colours: cooling `#65accc`, heating `#c19270`), so the
+    grid mixes the two styles. Mapping caveats: `MoistCooling` uses `moist_cooling` and
+    `Dehumidifying`/Dry share `dehumidity` by name only; it isn't verified which app mode each
+    artwork belongs to. A refused write (the integration's human-readable errors) is shown as an
+    HA notification instead of being swallowed.
+  - **Card 0.4.0 layout (2026-09-24), from Kevin's first look at 0.3.0.** Top to bottom: (1) a
+    **setpoint stepper** like the stock climate card (big number, round -/+ buttons) that swaps by
+    mode via the `controls` list: target temperature normally, the **Dry humidity target** (50-60,
+    5% steps) in Dry, **low/high steppers** in KeepMode, nothing when off/clean-mode; (2) the mode
+    picker, now with an **Off button** (`climate.turn_off`) -- the stock tile and its HVAC-mode bar
+    were removed at Kevin's request, and Off would otherwise have no home, so this was a design
+    call worth knowing about; (3) **labelled airflow rows** (Fan speed / Vertical louver /
+    Horizontal louver) -- the tile's three unlabelled dropdowns were unreadable until opened; they
+    are custom native `<select>`s calling `climate.set_fan_mode` / `set_swing_mode` /
+    `set_swing_horizontal_mode`, since HA has no labelled stock row for climate attributes; (4)
+    stock `entities` (AI mode, nanoeX, quiet, airflow mode, targeting, air-quality, double-temp
+    switch) and `glance` cards. The humidity and low/high number entities are no longer rows --
+    they are the steppers. **Stepper taps are debounced** (700 ms, one write per burst, value
+    moves locally at once) because each write to the unit takes ~3 s; this settles the old
+    "should the card debounce" question for steppers (the stock `entities` rows are unchanged).
+  - **Mode tooltips** (native `title` on the picker buttons; hover only, so not on touch):
+    user-facing text in `const.OPERATION_MODE_TOOLTIPS` (plain English, no error codes/Japanese/API
+    jargon -- tested), delivered as the operation_mode sensor's `mode_descriptions` attribute and
+    listed in `_unrecorded_attributes` so the recorder doesn't store static text on every change.
+    The card holds no copy of its own. Different from `OPERATION_MODE_DESCRIPTIONS`, which is the
+    developer-facing note set. Add a tooltip when adding a mode (`test_sensor` enforces coverage).
+  - **The old YAML prototype (`dashboard/eolia.yaml`) was deleted** -- it hardcoded entity ids
+    and encoded rules that had since gone stale.
+  - **Not done / ideas**: the card doesn't use the per-model `supports()` flags directly (a
+    control whose entity doesn't exist -- e.g. air quality on this model -- is simply skipped);
+    no visual editor (`getConfigElement`); no separate treatment of a unit that's "off" beyond
+    hiding settings; the louver/airflow/shield-hit icons from the app are unused (dark grey or
+    white line art that disappears on one theme -- would need per-theme recolouring).
+- **Known gaps, deliberately left**: the card's appearance is only ever checked by eye (no headless
+  browser here; the JS tests cover logic), tooltips are hover-only (nothing on touch), changing settings during a clean-family mode (the "AC is
+  off" guard still fires -- the card now hides those controls instead), `air_flow`/shield-hit in the clean modes,
   `CoolDehumidifying` through HA (CLI-confirmed only), `KeepHeating` (rejected, no flag
   explains it), Kevin's
   unexplained 14:06 power-on, token refresh after 14 days,
