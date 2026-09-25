@@ -209,7 +209,7 @@ async def cmd_set(args: argparse.Namespace) -> None:
         current = await api.async_get_status(appliance_id)
         # Mirrors coordinator.py's read-modify-write contract exactly: start from the
         # last-known status's fixed control fields, inject silence_control (write-only,
-        # no readback -- see findings.md), then overlay only what was requested.
+        # no readback -- see docs/findings.md), then overlay only what was requested.
         payload = current.to_control_fields()
         payload["silence_control"] = args.silence if args.silence is not None else False
 
@@ -237,7 +237,7 @@ async def cmd_set(args: argparse.Namespace) -> None:
             payload["wind_shield_hit"] = args.wind_shield_hit
         if args.humidity is not None:
             # NOT part of EoliaStatus.to_control_fields() -- deliberately excluded there
-            # since it broke every other mode's PUT (see findings.md's "RESOLVED"
+            # since it broke every other mode's PUT (see docs/findings.md's "RESOLVED"
             # section). Injected here only for testing whether some specific mode (e.g.
             # ComfortableDehumidification/Dry) is the exception and actually requires it.
             payload["humidity"] = args.humidity
@@ -378,7 +378,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help=(
             "EXPERIMENTAL: not part of the normal control-field contract (see "
-            "findings.md) -- only for testing whether a specific mode requires it"
+            "docs/findings.md) -- only for testing whether a specific mode requires it"
         ),
     )
     p_set.add_argument(

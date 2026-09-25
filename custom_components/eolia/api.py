@@ -1,7 +1,7 @@
 """Eolia cloud API client.
 
 Wire protocol details (base URL, headers, the X-Eolia-Date clock-skew check, the exact
-control-request field set) are all taken from findings.md's live-confirmed contract.
+control-request field set) are all taken from docs/findings.md's live-confirmed contract.
 """
 
 from __future__ import annotations
@@ -165,10 +165,10 @@ class EoliaApiClient:
                         )
                     elif code not in _KNOWN_CODES:
                         # Log anything not specially handled below verbatim so it can be
-                        # folded back into findings.md/const.py later.
+                        # folded back into docs/findings.md/const.py later.
                         _LOGGER.debug(
                             "Eolia API error code=%s message=%s (undocumented code, "
-                            "consider adding to findings.md)",
+                            "consider adding to docs/findings.md)",
                             code,
                             message,
                         )

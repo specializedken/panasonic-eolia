@@ -77,3 +77,56 @@ def test_operation_mode_sensor_exposes_the_double_temp_min_gap(status_response):
     attrs = _description("operation_mode").attrs_fn(EoliaStatus.from_dict(status_response))
     # The card enforces the low/high gap instantly from this; it must not hardcode the number.
     assert attrs["double_temp_min_gap"] == DOUBLE_MODE_TEMP_MIN_GAP == 5
+
+
+# --- Air-quality sensors exist only on models with the `airquality` capability -----------------
+def _setup_sensors(hass, functions):
+    """Run the platform's setup against a real coordinator; return the created entities."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from custom_components.eolia.coordinator import EoliaDataUpdateCoordinator
+    from custom_components.eolia.models import EoliaDevice
+    from custom_components.eolia.sensor import async_setup_entry
+
+    appliance_id = "EXAMPLEAPPLIANCEID0000000000000000000000000="
+    coordinator = EoliaDataUpdateCoordinator(
+        hass,
+        AsyncMock(),
+        [EoliaDevice(appliance_id=appliance_id, nickname="Yurt", product_code="CS-712DX2-W", product_name="T")],
+    )
+    if functions is not None:
+        coordinator.functions[appliance_id] = functions
+    entry = SimpleNamespace(runtime_data=SimpleNamespace(coordinator=coordinator))
+    added = []
+
+    async def run():
+        await async_setup_entry(hass, entry, lambda entities: added.extend(entities))
+
+    return run, added
+
+
+async def test_air_quality_sensors_are_not_created_on_a_model_without_the_feature(hass):
+    run, added = _setup_sensors(hass, {"airquality": False})
+    await run()
+    keys = {e.entity_description.key for e in added}
+    assert "aq_name" not in keys and "aq_value" not in keys
+    assert {"inside_temp", "outside_temp", "inside_humidity", "operation_mode"} <= keys
+
+
+async def test_air_quality_sensors_are_created_on_a_model_with_the_feature(hass):
+    run, added = _setup_sensors(hass, {"airquality": True})
+    await run()
+    assert {"aq_name", "aq_value"} <= {e.entity_description.key for e in added}
+
+
+async def test_air_quality_sensors_are_created_when_capabilities_are_unknown(hass):
+    # A failed /functions fetch must not make sensors disappear.
+    run, added = _setup_sensors(hass, None)
+    await run()
+    assert {"aq_name", "aq_value"} <= {e.entity_description.key for e in added}
+
+
+def test_only_the_air_quality_sensors_are_capability_gated():
+    gated = {d.key: d.function_id for d in SENSOR_DESCRIPTIONS if d.function_id}
+    assert gated == {"aq_name": "airquality", "aq_value": "airquality"}

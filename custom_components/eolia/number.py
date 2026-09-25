@@ -2,7 +2,7 @@
 
 Two independent features live here:
 - KeepMode's ("double temperature setting") low/high range -- a separate resource from
-  /status (GET/PUT .../customsettings), live-confirmed 2026-09-23. See findings.md's
+  /status (GET/PUT .../customsettings), live-confirmed 2026-09-23. See docs/findings.md's
   "KeepMode / double temperature setting" section and tests/fixtures/live_captures/07 + 16
   (the set-double-temp capture). The server enforces high/low must be at least 5 degrees
   apart (E-21291-02009 otherwise); not validated client-side here (mirrors how the

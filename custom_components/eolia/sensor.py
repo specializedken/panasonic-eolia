@@ -1,7 +1,7 @@
 """Sensor platform for the Eolia integration.
 
 All values come from the same GET /status the coordinator already polls -- zero extra API
-calls. Field availability is not assumed uniform across devices (findings.md flags
+calls. Field availability is not assumed uniform across devices (docs/findings.md flags
 per-device capability gating as not fully understood); a None value from the model
 naturally makes the entity report `unavailable` rather than a bogus reading.
 """
@@ -37,6 +37,7 @@ class EoliaSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[EoliaStatus], StateType]
     attrs_fn: Callable[[EoliaStatus], dict[str, Any]] | None = None
+    function_id: str = ""  # /products/{code}/functions flag gating this sensor, if any
 
 
 def _operation_mode(status: EoliaStatus) -> str:
@@ -95,18 +96,20 @@ SENSOR_DESCRIPTIONS: tuple[EoliaSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda status: status.inside_humidity,
     ),
-    # aq_name is the primary, human-meaningful air-quality state (e.g. "off" when
-    # monitoring is disabled -- see findings.md, this is expected on a device with
-    # airquality: false, not a bug). aq_value's numeric scale isn't documented anywhere,
-    # so it's a separate, disabled-by-default diagnostic sensor rather than a guess.
+    # aq_name is the primary, human-meaningful air-quality state. aq_value's numeric scale
+    # isn't documented anywhere, so it's a separate, disabled-by-default diagnostic sensor
+    # rather than a guess. Both are only created on models with the `airquality` capability:
+    # on one without it (CS-712DX2-W) they could only ever read "off" / -1.
     EoliaSensorEntityDescription(
         key="aq_name",
         translation_key="air_quality",
+        function_id="airquality",
         value_fn=lambda status: status.aq_name,
     ),
     EoliaSensorEntityDescription(
         key="aq_value",
         translation_key="air_quality_value",
+        function_id="airquality",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         value_fn=lambda status: status.aq_value,
@@ -125,6 +128,8 @@ async def async_setup_entry(
         EoliaSensor(coordinator, appliance_id, description)
         for appliance_id in coordinator.devices
         for description in SENSOR_DESCRIPTIONS
+        # The model's own capability flag (unknown flags allow, see coordinator.supports()).
+        if coordinator.supports(appliance_id, description.function_id)
     )
 
 

@@ -2,7 +2,7 @@
 
 Cannot use Home Assistant's built-in OAuth2 config-flow helper: Eolia's Auth0 client is a
 native-app registration whose redirect_uri is fixed to a custom mobile scheme and strictly
-rejects any other value (confirmed live -- see findings.md and the plan file this was
+rejects any other value (confirmed live -- see docs/findings.md and the plan file this was
 built from). A human has to complete the /authorize browser step by hand at least once;
 this flow makes that step as painless as possible (foolproof DevTools instructions, code
 pasted back as plain text) rather than assuming any one-time local customization.

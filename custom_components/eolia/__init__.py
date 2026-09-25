@@ -53,7 +53,11 @@ _RETIRED_UNIQUE_ID_SUFFIXES = ("_double_temp_enabled",)
 # as unique_id suffix -> flag. The platforms already don't create them for a model without the
 # flag, but a registry entry left from before that gating (or from a model swap) would sit on
 # the device as a dead "unavailable" entity -- and the Lovelace card would show a row for it.
-_MODEL_GATED_UNIQUE_ID_SUFFIXES = {"_airquality": "airquality"}
+_MODEL_GATED_UNIQUE_ID_SUFFIXES = {
+    "_airquality": "airquality",  # the air-quality monitoring switch
+    "_aq_name": "airquality",  # the air-quality sensor
+    "_aq_value": "airquality",  # its raw-value diagnostic sensor
+}
 
 
 @callback

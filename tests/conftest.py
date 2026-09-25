@@ -1,7 +1,7 @@
 """Shared fixtures for the Eolia test suite.
 
 Fixtures under tests/fixtures/ are real traffic captured from Kevin's account
-(see findings.md and CLAUDE.md's "RESOLVED" sections) -- token/credential values in
+(see docs/findings.md and docs/research-history.md's "RESOLVED" sections) -- token/credential values in
 these tests are always fabricated dummies, never anything from the real
 .eolia_tokens.json.
 """

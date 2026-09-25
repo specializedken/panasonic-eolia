@@ -1,6 +1,6 @@
 """Auth0 Authorization Code + PKCE handling for the Eolia integration.
 
-See findings.md's "The one hard external constraint" -- Eolia's Auth0 client is a native
+See docs/findings.md's "The one hard external constraint" -- Eolia's Auth0 client is a native
 mobile app registration with a fixed redirect_uri we don't control, confirmed live to
 strictly reject any other redirect_uri. The authorization_code leg therefore can't be
 automated end-to-end; a human completes the /authorize browser step once per login

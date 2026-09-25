@@ -1,8 +1,8 @@
 """Data models for the Eolia integration.
 
 Field sets and types are taken from the real captured GET /devices, GET /status, and PUT
-/status request/response JSON documented in findings.md -- not guessed from the decompiled
-Java models, which (per findings.md) include several fields never observed on this device
+/status request/response JSON documented in docs/findings.md -- not guessed from the decompiled
+Java models, which (per docs/findings.md) include several fields never observed on this device
 and whose capability-gating logic isn't fully understood. Everything here is read
 defensively (`.get()` with sensible defaults) since a different device may expose a
 different field set.
@@ -111,7 +111,7 @@ class EoliaStatus:
         Deliberately excludes `applianceId` (URL only) and `humidity` (confirmed absent
         from the real captured PUT request for this device) and `silence_control` (not
         part of this model at all -- the coordinator injects it from its own cache). See
-        findings.md's "RESOLVED" section and const.CONTROL_REQUEST_FIELDS.
+        docs/findings.md's "RESOLVED" section and const.CONTROL_REQUEST_FIELDS.
         """
         payload: dict[str, Any] = {
             "ai_control": self.ai_control,
@@ -157,7 +157,7 @@ class EoliaCustomSettings:
     """Parsed GET/PUT .../customsettings response.
 
     A separate resource from EoliaStatus -- KeepMode's low/high range lives here, not in
-    /status (confirmed live 2026-09-23, see findings.md). Unlike EoliaStatus, the GET
+    /status (confirmed live 2026-09-23, see docs/findings.md). Unlike EoliaStatus, the GET
     response has no `appliance_id` field at all, so this model doesn't carry one either;
     the coordinator keys it by appliance_id externally, same as it does for silence_control.
     """

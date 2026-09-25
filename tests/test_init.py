@@ -103,3 +103,33 @@ async def test_unknown_capabilities_never_delete_anything(hass):
 
     assert async_remove_unsupported_entities(hass, entry, _coordinator(None)) == []
     assert registry.async_get(switch.entity_id) is not None
+
+
+async def test_stale_air_quality_sensors_are_removed_on_a_model_without_the_feature(hass):
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    ghosts = [
+        _add(registry, entry, "switch", "airquality", "yurt_air_quality_monitoring"),
+        _add(registry, entry, "sensor", "aq_name", "yurt_air_quality"),
+        _add(registry, entry, "sensor", "aq_value", "yurt_air_quality_raw_value"),
+    ]
+    keeper = _add(registry, entry, "sensor", "inside_temp", "yurt_indoor_temperature")
+
+    removed = async_remove_unsupported_entities(hass, entry, _coordinator({"airquality": False}))
+
+    assert sorted(removed) == sorted(g.entity_id for g in ghosts)
+    assert registry.async_get(keeper.entity_id) is not None
+
+
+async def test_air_quality_sensors_are_kept_on_a_model_that_has_the_feature(hass):
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    sensors = [
+        _add(registry, entry, "sensor", "aq_name", "yurt_air_quality"),
+        _add(registry, entry, "sensor", "aq_value", "yurt_air_quality_raw_value"),
+    ]
+
+    assert async_remove_unsupported_entities(hass, entry, _coordinator({"airquality": True})) == []
+    assert all(registry.async_get(s.entity_id) is not None for s in sensors)

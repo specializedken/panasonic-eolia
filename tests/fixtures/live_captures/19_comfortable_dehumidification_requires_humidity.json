@@ -37,7 +37,7 @@
   },
   "app_confirmed": "App shows Dry mode active with a 50% humidity target.",
   "notes": [
-    "MAJOR FINDING: humidity, which the general control-request contract deliberately excludes (see findings.md's 'RESOLVED' section), is actually REQUIRED for this one mode. Without it, every attempt failed regardless of temperature or ai_control value.",
+    "MAJOR FINDING: humidity, which the general control-request contract deliberately excludes (see docs/findings.md's 'RESOLVED' section), is actually REQUIRED for this one mode. Without it, every attempt failed regardless of temperature or ai_control value.",
     "temperature=0.0 is correct for this mode -- it targets humidity, not temperature. temperature=24.0 (a real value) was rejected with E-21291-01712 (temperature-out-of-range), confirming this mode genuinely has no temperature target.",
     "humidity has no GET readback, same as silence_control -- confirmed by checking the response body, which has no humidity field at all.",
     "The response also doesn't echo the humidity value in any form -- can't verify what value 'stuck' from the response alone, only via the app.",

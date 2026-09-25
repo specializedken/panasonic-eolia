@@ -4,7 +4,7 @@ silence_control (quiet mode) is confirmed write-only: present in every real capt
 control request but absent from every GET/PUT .../status response, so its on-device state
 can't be read back. It's backed by the coordinator's local cache instead of a status
 field, and can go stale if changed via the physical remote or the real app -- see
-coordinator.py and findings.md.
+coordinator.py and docs/findings.md.
 """
 
 from __future__ import annotations

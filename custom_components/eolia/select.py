@@ -1,7 +1,7 @@
 """Select platform for the Eolia integration.
 
 AI mode / ECONAVI are not independently toggleable in this API -- ECONAVI is a third state
-of the same `ai_control` field alongside AI-comfort-mode (see findings.md), so a 3-option
+of the same `ai_control` field alongside AI-comfort-mode (see docs/findings.md), so a 3-option
 select fits better than a boolean switch. air_flow and wind_shield_hit are likewise small,
 fixed string enums (live-confirmed against the app 2026-09-23) that map naturally onto
 selects rather than switches.

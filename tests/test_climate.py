@@ -1,6 +1,6 @@
 """Tests for climate.py's operation_mode <-> HVACMode mapping.
 
-This is the "highest-value test" called out in PHASE1_PLAN.md's testing plan: every
+This is the "highest-value test" called out in docs/phase1-plan.md's testing plan: every
 operation_mode must land in a bucket (or be one of the two intentionally-excluded
 values), and the hvac_mode -> default operation_mode table must round-trip back into
 the same bucket it came from -- otherwise picking a coarse hvac_mode and reading it

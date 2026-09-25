@@ -27,7 +27,7 @@
   "app_confirmed": "Kevin set this himself via the app; app UI shows 'double temperature setting'.",
   "notes": [
     "This was a GET only, captured via a raw one-off script bypassing EoliaStatus.from_dict() entirely (to make sure no unmodeled field was being silently dropped) -- confirms the full raw field set still matches what models.py already parses, no hidden second-temperature field present.",
-    "RESOLVED 2026-09-23: the range is not in /status at all. It lives in a separate resource, GET /devices/{id}/customsettings -> double_mode_temp {status, high, low}. Live read with Kevin's app-set range: {\"status\": true, \"high\": 28, \"low\": 23}. See findings.md 'KeepMode / double temperature setting'.",
+    "RESOLVED 2026-09-23: the range is not in /status at all. It lives in a separate resource, GET /devices/{id}/customsettings -> double_mode_temp {status, high, low}. Live read with Kevin's app-set range: {\"status\": true, \"high\": 28, \"low\": 23}. See docs/findings.md 'KeepMode / double temperature setting'.",
     "wind_direction reset to 0 and wind_direction_horizon reset to 'auto' when entering KeepMode -- possibly this mode forces auto airflow regardless of prior fan/swing settings. Not yet confirmed whether this is mode-driven or coincidental.",
     "ai_control stayed comfortable_econavi (carried over from prior steps) -- KeepMode and ai_control appear independent, as expected from the data model."
   ]

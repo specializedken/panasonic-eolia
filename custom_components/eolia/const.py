@@ -1,9 +1,9 @@
 """Constants for the Eolia integration.
 
-All values here are taken directly from findings.md, which documents the confirmed
+All values here are taken directly from docs/findings.md, which documents the confirmed
 (static analysis + live captured traffic) contract of Panasonic's Eolia cloud API.
 Do not change any wire-format value (Auth0 params, API paths, enum strings) without
-re-confirming against findings.md or fresh live traffic -- these are not guesses.
+re-confirming against docs/findings.md or fresh live traffic -- these are not guesses.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ DOMAIN = "eolia"
 # --- Auth0 --------------------------------------------------------------------------
 # Native-app client registration; redirect_uri is fixed and only accepts this exact
 # custom scheme (confirmed live 2026-09-23 -- any other redirect_uri gets an immediate
-# "Callback URL mismatch" error). See findings.md's "The one hard external constraint".
+# "Callback URL mismatch" error). See docs/findings.md's "The one hard external constraint".
 AUTH0_DOMAIN = "auth.digital.panasonic.com"
 AUTH0_CLIENT_ID = "JpNCoLeXs4rPMhWmnOjbOxat7MWTZEgr"
 AUTH0_AUDIENCE = "https://club.panasonic.jp/JpNCoLeXs4rPMhWmnOjbOxat7MWTZEgr/api/v1/"
@@ -36,7 +36,7 @@ API_BASE_URL = "https://app.rac.apws.panasonic.com/eolia/v6"
 EOLIA_DATE_TIMEZONE = "Asia/Tokyo"
 EOLIA_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
-DEFAULT_SCAN_INTERVAL_SECONDS = 60  # unvalidated guess -- findings.md documents no rate limit
+DEFAULT_SCAN_INTERVAL_SECONDS = 60  # unvalidated guess -- docs/findings.md documents no rate limit
 
 # outside_temp uses this as a sentinel for "no reading available" rather than omitting
 # the field or sending null -- live-confirmed 2026-09-23 (repeatedly): shows up right
@@ -55,7 +55,7 @@ CONF_EXPIRES_AT = "expires_at"  # computed epoch seconds, not the raw expires_in
 
 
 # --- operation_mode enum (wire values) -------------------------------------------------
-# Full table + Japanese UI labels documented in findings.md's "operation_mode -- the
+# Full table + Japanese UI labels documented in docs/findings.md's "operation_mode -- the
 # 'Dry vs Cool & Dehumidify' answer" section, reverse engineered from s8/k.java.
 class EoliaOperationMode(StrEnum):
     """Wire values of the `operation_mode` field."""
@@ -100,7 +100,7 @@ class EoliaOperationMode(StrEnum):
 # matches what CoolDehumidifying accepted live. The remaining modes (Auto, Heating,
 # KeepHeating, Dehumidifying, AutoTempControl, KeepMode, SmellCare/SmellCareSpot,
 # NanoexCleaning, Cleaning, Stop, Other) are not part of that research pass -- their
-# descriptions are either self-evident or carried over from findings.md's original
+# descriptions are either self-evident or carried over from docs/findings.md's original
 # decompiled Japanese-label table, not independently verified against official docs.
 # Sources:
 #   https://panasonic.jp/aircon/glossary/cooling.html
@@ -237,7 +237,7 @@ OPERATION_MODE_TOOLTIPS: dict[str, str] = {
 
 # --- ai_control enum (wire values) ------------------------------------------------------
 # AI mode / ECONAVI are NOT independently toggleable in this API -- ECONAVI is a third
-# state of the same field alongside AI-comfort-mode. See findings.md.
+# state of the same field alongside AI-comfort-mode. See docs/findings.md.
 class EoliaAiControl(StrEnum):
     """Wire values of the `ai_control` field."""
 
@@ -289,13 +289,13 @@ class EoliaWindShieldHit(StrEnum):
 
 
 # --- Known Eolia error codes ---------------------------------------------------------------
-# See findings.md for detail. Everything else should be logged verbatim rather than
+# See docs/findings.md for detail. Everything else should be logged verbatim rather than
 # guessed at.
 ERROR_CODE_CLOCK_SKEW = "E-21291-00002"
 ERROR_CODE_GENERIC_APPLICATION_ERROR = "E-21291-00007"
 # Generic "system error" -- seen from several untested /poc/.../eco/* and
 # /powermonitor/settings endpoints; not conclusively "unsupported", could just need query
-# params that weren't guessed. See findings.md's "Power/eco history" section.
+# params that weren't guessed. See docs/findings.md's "Power/eco history" section.
 ERROR_CODE_SYSTEM_ERROR = "E-21291-00000"
 # Temperature out of valid range for the target operation_mode (observed with
 # temperature=0.0 carried over from a Stop-mode status into an active-mode write, and
@@ -307,7 +307,7 @@ ERROR_CODE_TEMPERATURE_OUT_OF_RANGE = "E-21291-01712"
 # KeepHeating -- neither ever confirmed as a real app-reachable mode on this device (see
 # OPERATION_MODE_DESCRIPTIONS). Both excluded from climate.py's settable preset list as
 # a result. Same generic "an application error occurred" message as 00007/01712; not
-# distinguished further -- likely per-device capability gating (see findings.md's
+# distinguished further -- likely per-device capability gating (see docs/findings.md's
 # ExclusionStrategy note) rather than a payload-shape problem.
 ERROR_CODE_UNKNOWN_01711 = "E-21291-01711"
 # "Controlled by another device, cannot change for 2 minutes" -- the literal message,
@@ -327,7 +327,7 @@ ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW = "E-21291-02009"
 # --- Fixed control-request payload contract -------------------------------------------------
 # Confirmed live 2026-09-23 by capturing a real PUT from the actual Eolia app: the body
 # must NOT include applianceId (URL only) or humidity, and MUST include silence_control
-# even though it has no readback in GET /status. See findings.md's "RESOLVED" section.
+# even though it has no readback in GET /status. See docs/findings.md's "RESOLVED" section.
 # CORRECTION, later the same day: "must not include humidity" turned out to be
 # mode-specific, not universal -- ComfortableDehumidification is the one exception that
 # actually REQUIRES humidity (see DRY_MODE_HUMIDITY_RANGE below). humidity stays out of
@@ -444,7 +444,7 @@ NO_TARGET_TEMPERATURE_MODES = (
 )
 
 # --- KeepMode ("double temperature setting") -- /customsettings -----------------------
-# Separate resource from /status -- see findings.md's "KeepMode / double temperature
+# Separate resource from /status -- see docs/findings.md's "KeepMode / double temperature
 # setting" section. appliance_id is excluded from the PUT body the same way as /status
 # (id only in the URL); unlike /status, this resource's GET response has no appliance_id
 # field at all.
@@ -452,7 +452,7 @@ CUSTOM_SETTINGS_REQUEST_FIELDS = ("double_mode_temp", "peak_cut")
 
 # App-enforced bounds (MyAirconSettingActivity.X() falls back to the last-known value
 # outside these ranges) -- not yet confirmed as server-enforced, just what the app itself
-# allows the user to pick. See findings.md.
+# allows the user to pick. See docs/findings.md.
 DOUBLE_MODE_TEMP_HIGH_RANGE = (21, 30)
 DOUBLE_MODE_TEMP_LOW_RANGE = (16, 25)
 # high - low must be at least this many degrees (E-21291-02009 below it; live 2026-09-23).
@@ -465,7 +465,7 @@ DOUBLE_MODE_TEMP_MIN_GAP = 5
 # Major finding, live-confirmed 2026-09-23: unlike every other operation_mode tested,
 # ComfortableDehumidification requires `humidity` in the PUT body (the general contract
 # elsewhere deliberately EXCLUDES it -- see CONTROL_REQUEST_FIELDS's docstring and
-# findings.md's "RESOLVED" section) and requires `temperature=0.0` (a real target
+# docs/findings.md's "RESOLVED" section) and requires `temperature=0.0` (a real target
 # temperature, e.g. 24.0, is rejected with E-21291-01712 -- this mode doesn't target a
 # temperature, it targets humidity instead). Without `humidity` present at all, every
 # attempt failed with the generic E-21291-00007. Server-validated range, confirmed by

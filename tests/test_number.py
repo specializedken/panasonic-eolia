@@ -1,6 +1,6 @@
 """Tests for number.py's entity descriptions.
 
-Bounds are the app-enforced ranges found statically (see findings.md); the actual
+Bounds are the app-enforced ranges found statically (see docs/findings.md); the actual
 low/high values themselves are live-confirmed against the app 2026-09-23.
 """
 

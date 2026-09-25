@@ -1,7 +1,7 @@
 """Tests for coordinator.py's read-modify-write PUT-body contract.
 
 async_set_status() is the only place a PUT body gets built. These tests regression-lock
-the exact finding that blocked live testing for a day (see findings.md's "RESOLVED"
+the exact finding that blocked live testing for a day (see docs/findings.md's "RESOLVED"
 section): the outgoing payload must never contain applianceId/humidity and must always
 contain silence_control, even though silence_control has no GET readback at all.
 """

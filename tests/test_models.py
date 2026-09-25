@@ -1,7 +1,7 @@
 """Regression tests for models.py's control-request field contract.
 
 This directly encodes the finding that blocked live PUT testing for a day (see
-findings.md's "RESOLVED" section): applianceId must never appear in the PUT body
+docs/findings.md's "RESOLVED" section): applianceId must never appear in the PUT body
 (URL only) and humidity must be excluded even though it's present on every GET
 response.
 """

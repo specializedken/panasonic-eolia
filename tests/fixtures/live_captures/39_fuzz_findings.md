@@ -103,7 +103,7 @@ off-grid `25.3` was rejected `E-21291-01712` in all four. So the server grid is 
 
 Accepted as `MoistCooling` when entered from Cooling, Heating, Dry, Auto, Blast, and from power
 off; its temperature (26.0) is honored too. This contradicts the earlier "silently downgrades to
-`Cooling`" note in CLAUDE.md and capture 25; the cause of that earlier observation is unknown (it may
+`Cooling`" note in docs/integration-log.md and capture 25; the cause of that earlier observation is unknown (it may
 depend on device/room conditions). The coordinator's requested-vs-returned mode check is still
 harmless — it just should not be described as a known MoistCooling behaviour.
 

@@ -2,7 +2,7 @@
 
 Owns the read-modify-write contract for control writes: async_set_status() is the ONLY
 place a PUT body gets built, starting from the last-known status and applying only the
-requested changes. This is deliberate -- see findings.md's "RESOLVED" section for the
+requested changes. This is deliberate -- see docs/findings.md's "RESOLVED" section for the
 hard-won finding that a hand-built PUT body missing the exact right field set (or
 including fields the real app never sends) gets rejected with an undiagnosable generic
 error. Every entity action funnels through this one method rather than building its own
@@ -116,17 +116,17 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         self.api = api
         self.devices: dict[str, EoliaDevice] = {d.appliance_id: d for d in devices}
         # silence_control has no readback in any GET/PUT response (confirmed in
-        # findings.md) -- this is the only source of truth for its "current" value, and
+        # docs/findings.md) -- this is the only source of truth for its "current" value, and
         # it can go stale if changed via the physical remote or the real app.
         self._silence_control_cache: dict[str, bool] = {}
         # Dry mode's (ComfortableDehumidification) humidity target: same write-only,
-        # no-GET-readback situation as silence_control -- see findings.md and
+        # no-GET-readback situation as silence_control -- see docs/findings.md and
         # tests/fixtures/live_captures/19. Only ever sent to the server while
         # operation_mode is actually ComfortableDehumidification (see async_set_status);
         # every other mode rejects the `humidity` field entirely.
         self._humidity_cache: dict[str, int] = {}
         # KeepMode's double-temperature range lives on a separate resource
-        # (.../customsettings, not /status -- see findings.md and
+        # (.../customsettings, not /status -- see docs/findings.md and
         # tests/fixtures/live_captures/07). Not part of `self.data` (which
         # DataUpdateCoordinator's own change-notification machinery is keyed on) -- kept
         # as a side-channel dict instead, same pattern as _silence_control_cache. A fetch
@@ -357,7 +357,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # ComfortableDehumidification additionally targets humidity, not temperature: the
         # server also requires `humidity` in the payload (E-21291-00007 otherwise) -- the
         # one exception to the general contract, which deliberately excludes humidity for
-        # every other mode (including ClothesDryer). See findings.md / const.py's
+        # every other mode (including ClothesDryer). See docs/findings.md / const.py's
         # DRY_MODE_HUMIDITY_RANGE.
         if payload["operation_mode"] == EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION:
             payload["humidity"] = changes.get("humidity", self.get_humidity(appliance_id))

@@ -61,7 +61,7 @@ def test_status_path_url_encodes_appliance_id():
 
 @freeze_time("2026-01-15 03:00:00")  # arbitrary UTC instant, well off JST
 def test_headers_x_eolia_date_is_always_jst(monkeypatch):
-    # Confirmed live (findings.md): the server enforces a +/-5 minute clock-skew check
+    # Confirmed live (docs/findings.md): the server enforces a +/-5 minute clock-skew check
     # against X-Eolia-Date, and it must be JST regardless of the HA host's own timezone.
     has_tzset = hasattr(time, "tzset")
     monkeypatch.setenv("TZ", "America/New_York")

@@ -17,7 +17,7 @@ detail — this README is just an index pointing at the headline finding of each
 | 01 | Power on, `Cooling` @ 24°C | New error `E-21291-01712` (temperature out of range for an active mode) when `temperature=0.0` carries over from `Stop`. `wind_volume=0`="auto" theory supported. |
 | 02, 04 | Lockout hits | New error `E-21291-01718` — first theory: the **official app writes even on a no-op menu close**, locking out other clients for ~2 min. **CORRECTED later (see 37+ below)**: also reproduced through HA's own writes alone with zero other clients connected, so this isn't the whole story. |
 | 03, 05, 06 | `nanoex` off, all 3 `ai_control` values | All confirmed against the app. |
-| 07 | `KeepMode` ("double temperature setting") | Confirmed at the wire level; the low/high range is **not** in `/status` — see 16 and `findings.md` for where it actually lives. |
+| 07 | `KeepMode` ("double temperature setting") | Confirmed at the wire level; the low/high range is **not** in `/status` — see 16 and `docs/findings.md` for where it actually lives. |
 | 08, 09 | `wind_volume` 0 and 1 | 0=Auto, 1="Minimal" confirmed in-app. Also: `ai_control` drifted `comfortable_econavi`→`comfortable` on its own, unexplained one-off (Kevin confirmed he didn't touch it). |
 | 10–12 | `air_flow`: quiet/powerful/long | All 3 confirmed in-app; independent of `wind_volume` (`long` visibly increases airflow even at `wind_volume=0`). |
 | 13–14 | `wind_shield_hit`: shield/hit | Both confirmed in-app (avoid-people / aim-at-people). |

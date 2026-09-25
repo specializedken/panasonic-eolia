@@ -1,7 +1,7 @@
 """Tests for config_flow.py's authorization-code extraction.
 
 This is the parser behind the config flow's single text field, which per
-PHASE1_PLAN.md must accept either a bare code or the full failed-redirect URL a user
+docs/phase1-plan.md must accept either a bare code or the full failed-redirect URL a user
 copies out of browser DevTools (the primary, zero-setup login path -- see "The one hard
 external constraint" in the plan).
 """

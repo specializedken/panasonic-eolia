@@ -41,7 +41,7 @@ from .entity import EoliaEntity
 
 _LOGGER = logging.getLogger(__name__)
 
-# See findings.md's operation_mode table. Subjective bucketing, flagged in the plan for
+# See docs/findings.md's operation_mode table. Subjective bucketing, flagged in the plan for
 # correction against real device behavior -- especially the utility/maintenance modes
 # (SmellCare/NanoexCleaning/Cleaning) bucketed under FAN_ONLY as the closest fit, and
 # AutoTempControl/KeepMode under AUTO.
@@ -82,7 +82,7 @@ _DEFAULT_MODE_FOR_HVAC_MODE: dict[HVACMode, EoliaOperationMode] = {
 # (plain, non-AI dehumidify) is excluded too -- confirmed rejected twice on this device
 # (E-21291-01712/E-21291-01711 depending on payload), both via the CLI and the real HA
 # integration; the app's own "dehumidification" menu item maps to
-# ComfortableDehumidification instead. See findings.md's "What the cooling/dehumidify
+# ComfortableDehumidification instead. See docs/findings.md's "What the cooling/dehumidify
 # family actually does" section and tests/fixtures/live_captures/19. KEEP_HEATING is
 # excluded for the same reason -- live-confirmed 2026-09-23 rejected with E-21291-01711
 # (the same generic-error code DEHUMIDIFYING hit) when deliberately selected from the
