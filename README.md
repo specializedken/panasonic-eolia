@@ -41,11 +41,19 @@ Not covered: the weekly timer, AI scenes, energy history, notifications and firm
 
 ## Install
 
-Manual install (there is no HACS metadata yet):
+**With HACS** (as a custom repository):
+
+1. In HACS, open the ⋮ menu → **Custom repositories**, add this repository's URL with the type
+   **Integration**, then download **Panasonic Eolia**.
+2. Restart Home Assistant.
+
+**Manually:**
 
 1. Copy the `custom_components/eolia/` folder from this repo into your Home Assistant
    `config/custom_components/` directory.
 2. Restart Home Assistant.
+
+Either way the card and its icons come with the integration; there is nothing else to install.
 
 ## Set up
 

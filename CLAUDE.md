@@ -30,6 +30,7 @@ understanding of the API) was met on 2026-09-23; everything since is integration
 | **Panasonic icons** | The 12 the card uses are **committed** in `custom_components/eolia/www/icons/{modes,rows}/` and served by the integration (`frontend.py`). `/icons/` at the repo root is the extractor's full local output (~100 files) and stays gitignored |
 | Decompiled app, APK, fuzz logs, tokens | `code/`, `*.apk`, `fuzz_runs/`, `.eolia_tokens.json` — all gitignored |
 | Docs | `docs/` (index: `docs/README.md`) and the top-level `README.md` |
+| HACS | `hacs.json` (repo root) and the manifest's `issue_tracker`. Not done: `brand/icon.png`, which only HACS's *default* list requires; `codeowners` is empty |
 
 ## Documentation
 
