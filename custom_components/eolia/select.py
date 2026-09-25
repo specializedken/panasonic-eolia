@@ -11,13 +11,21 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import EoliaConfigEntry
-from .const import EoliaAiControl, EoliaAirFlow, EoliaWindShieldHit
+from .const import (
+    WIND_DIRECTION_LEVELS,
+    WIND_VOLUME_LEVELS,
+    EoliaAiControl,
+    EoliaAirFlow,
+    EoliaWindDirectionHorizon,
+    EoliaWindShieldHit,
+)
 from .coordinator import EoliaDataUpdateCoordinator
 from .entity import EoliaEntity
 from .models import EoliaStatus
@@ -25,10 +33,13 @@ from .models import EoliaStatus
 
 @dataclass(frozen=True, kw_only=True)
 class EoliaSelectEntityDescription(SelectEntityDescription):
-    """Describes an Eolia select entity backed by a single EoliaStatus string field."""
+    """Describes an Eolia select entity backed by a single EoliaStatus field."""
 
     current_option_fn: Callable[[EoliaStatus], str]
     control_field: str  # kwarg name passed to coordinator.async_set_status
+    # Select options are always strings; numeric wire fields (fan speed, vertical louver)
+    # convert back with `int` before the write.
+    to_wire: Callable[[str], Any] = str
 
 
 SELECT_DESCRIPTIONS: tuple[EoliaSelectEntityDescription, ...] = (
@@ -52,6 +63,33 @@ SELECT_DESCRIPTIONS: tuple[EoliaSelectEntityDescription, ...] = (
         options=[mode.value for mode in EoliaWindShieldHit],
         control_field="wind_shield_hit",
         current_option_fn=lambda status: status.wind_shield_hit,
+    ),
+    # Fan speed and both louvers also exist as climate fan_mode / swing_mode /
+    # swing_horizontal_mode. They are separate selects so the Lovelace card can show them as
+    # ordinary labelled rows next to AI mode and airflow targeting, and so automations get a
+    # plain select to target. Same wire fields and rules as the climate versions.
+    EoliaSelectEntityDescription(
+        key="fan_speed",
+        translation_key="fan_speed",
+        options=[str(level) for level in WIND_VOLUME_LEVELS],
+        control_field="wind_volume",
+        current_option_fn=lambda status: str(status.wind_volume),
+        to_wire=int,
+    ),
+    EoliaSelectEntityDescription(
+        key="vertical_louver",
+        translation_key="vertical_louver",
+        options=[str(level) for level in WIND_DIRECTION_LEVELS],
+        control_field="wind_direction",
+        current_option_fn=lambda status: str(status.wind_direction),
+        to_wire=int,
+    ),
+    EoliaSelectEntityDescription(
+        key="horizontal_louver",
+        translation_key="horizontal_louver",
+        options=[mode.value for mode in EoliaWindDirectionHorizon],
+        control_field="wind_direction_horizon",
+        current_option_fn=lambda status: status.wind_direction_horizon,
     ),
 )
 
@@ -93,5 +131,6 @@ class EoliaSelect(EoliaEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         self._require_powered_on(f"change {self.entity_description.key}")
         await self.coordinator.async_set_status(
-            self._appliance_id, **{self.entity_description.control_field: option}
+            self._appliance_id,
+            **{self.entity_description.control_field: self.entity_description.to_wire(option)},
         )

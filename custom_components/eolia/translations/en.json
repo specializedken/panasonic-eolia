@@ -98,6 +98,42 @@
       }
     },
     "select": {
+      "fan_speed": {
+        "name": "Fan speed",
+        "state": {
+          "0": "Auto",
+          "1": "Minimum",
+          "2": "Low",
+          "3": "Medium",
+          "4": "High",
+          "5": "Maximum"
+        }
+      },
+      "vertical_louver": {
+        "name": "Vertical louver",
+        "state": {
+          "0": "Auto",
+          "1": "Upper",
+          "2": "Upper-middle",
+          "3": "Middle",
+          "4": "Middle-lower",
+          "5": "Straight down",
+          "6": "Swing"
+        }
+      },
+      "horizontal_louver": {
+        "name": "Horizontal louver",
+        "state": {
+          "front": "Straight ahead",
+          "spot": "Spot (focused)",
+          "wide": "Wide (spread)",
+          "to_left": "Left",
+          "nearby_left": "Slightly left",
+          "nearby_right": "Slightly right",
+          "to_right": "Right",
+          "auto": "Auto"
+        }
+      },
       "ai_mode": {
         "name": "AI mode",
         "state": {
@@ -158,8 +194,7 @@
     "switch": {
       "nanoex": { "name": "nanoeX" },
       "air_quality_monitor": { "name": "Air quality monitoring" },
-      "silence_control": { "name": "Quiet mode" },
-      "double_temp_enabled": { "name": "Double temperature setting" }
+      "silence_control": { "name": "Quiet mode" }
     },
     "number": {
       "double_temp_low": { "name": "Double temperature: low" },

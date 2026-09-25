@@ -69,3 +69,11 @@ def test_operation_mode_sensor_exposes_the_tooltips_but_does_not_record_them(sta
     attrs = _description("operation_mode").attrs_fn(EoliaStatus.from_dict(status_response))
     assert attrs["mode_descriptions"] == OPERATION_MODE_TOOLTIPS
     assert "mode_descriptions" in EoliaSensor._unrecorded_attributes
+
+
+def test_operation_mode_sensor_exposes_the_double_temp_min_gap(status_response):
+    from custom_components.eolia.const import DOUBLE_MODE_TEMP_MIN_GAP
+
+    attrs = _description("operation_mode").attrs_fn(EoliaStatus.from_dict(status_response))
+    # The card enforces the low/high gap instantly from this; it must not hardcode the number.
+    assert attrs["double_temp_min_gap"] == DOUBLE_MODE_TEMP_MIN_GAP == 5

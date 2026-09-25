@@ -28,6 +28,7 @@ from .const import (
     CLEAN_FAMILY_MODES,
     NO_TARGET_TEMPERATURE_MODES,
     OPERATION_MODE_FUNCTION_IDS,
+    PRESET_MODE_ORDER,
     TARGET_TEMPERATURE_RANGE,
     TEMPERATURE_STEP,
     WIND_DIRECTION_LEVELS,
@@ -101,8 +102,21 @@ _UNSETTABLE_PRESET_MODES = (
     EoliaOperationMode.NANOE,
     EoliaOperationMode.AUTO_TEMP_CONTROL,
 )
+
+
+def _preset_sort_key(mode: EoliaOperationMode) -> tuple[int, int]:
+    """Listed modes in PRESET_MODE_ORDER first, then the rest in enum order."""
+    if mode in PRESET_MODE_ORDER:
+        return (0, PRESET_MODE_ORDER.index(mode))
+    return (1, list(EoliaOperationMode).index(mode))
+
+
 _SETTABLE_PRESET_MODES = [
-    mode.value for mode in EoliaOperationMode if mode not in _UNSETTABLE_PRESET_MODES
+    mode.value
+    for mode in sorted(
+        (m for m in EoliaOperationMode if m not in _UNSETTABLE_PRESET_MODES),
+        key=_preset_sort_key,
+    )
 ]
 
 _SWING_HORIZONTAL_MODES = [mode.value for mode in EoliaWindDirectionHorizon]

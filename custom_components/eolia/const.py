@@ -416,6 +416,26 @@ CLEAN_FAMILY_MODES = (
     EoliaOperationMode.CLEANING,
 )
 
+# The order modes are offered in (the Lovelace card's mode grid and HA's own preset dropdown
+# both follow it), as Kevin asked 2026-09-24: Auto, Dry, Cooling, Cool & Dehumidify, Moist
+# Cooling, Heating, Double temperature, Clothes drying, Odor care, then the two clean modes
+# (NanoexCleaning is the app's おでかけクリーン, Cleaning is おそうじ / "self-clean"). Off is not
+# a preset; the card puts it first. Any settable mode not listed here (Fan only, ...) follows,
+# in enum order, so a mode is never dropped just because this list wasn't updated.
+PRESET_MODE_ORDER = (
+    EoliaOperationMode.AUTO,
+    EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION,
+    EoliaOperationMode.COOLING,
+    EoliaOperationMode.COOL_DEHUMIDIFYING,
+    EoliaOperationMode.MOIST_COOLING,
+    EoliaOperationMode.HEATING,
+    EoliaOperationMode.KEEP_MODE,
+    EoliaOperationMode.CLOTHES_DRYER,
+    EoliaOperationMode.SMELL_CARE,
+    EoliaOperationMode.NANOEX_CLEANING,
+    EoliaOperationMode.CLEANING,
+)
+
 # operation_modes with no user-settable target temperature: the server wants 0.0 and
 # rejects anything else with E-21291-01712. Both live-confirmed 2026-09-23.
 NO_TARGET_TEMPERATURE_MODES = (
@@ -435,6 +455,11 @@ CUSTOM_SETTINGS_REQUEST_FIELDS = ("double_mode_temp", "peak_cut")
 # allows the user to pick. See findings.md.
 DOUBLE_MODE_TEMP_HIGH_RANGE = (21, 30)
 DOUBLE_MODE_TEMP_LOW_RANGE = (16, 25)
+# high - low must be at least this many degrees (E-21291-02009 below it; live 2026-09-23).
+# The coordinator nudges the untouched bound to keep it, and the Lovelace card mirrors that
+# instantly (it reads this from the operation_mode sensor's `double_temp_min_gap` attribute
+# rather than hardcoding it).
+DOUBLE_MODE_TEMP_MIN_GAP = 5
 
 # --- ComfortableDehumidification ("Dry") mode's humidity target -----------------------
 # Major finding, live-confirmed 2026-09-23: unlike every other operation_mode tested,

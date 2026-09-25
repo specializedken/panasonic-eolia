@@ -35,6 +35,12 @@ def _status_with_mode(base: EoliaStatus, operation_mode: str) -> EoliaStatus:
     )
 
 
+@pytest.fixture(autouse=True)
+def _no_resync_delay(monkeypatch):
+    """The KeepMode status re-read retries with a real 2 s sleep; tests must not wait."""
+    monkeypatch.setattr("custom_components.eolia.coordinator._RESYNC_DELAY_SECONDS", 0)
+
+
 @pytest.fixture
 def device() -> EoliaDevice:
     return EoliaDevice(
@@ -978,3 +984,154 @@ async def test_unrequested_server_side_effects_do_not_raise(coordinator, initial
     await coordinator.async_set_status(APPLIANCE_ID, wind_shield_hit="hit")
 
     assert coordinator.data[APPLIANCE_ID] is forced
+
+
+# --- Re-reading state after a KeepMode toggle (Kevin saw ~10 s lag, 2026-09-24) ---------------
+# KeepMode is entered/left through /customsettings, but the mode every entity and the card
+# render from is /status, which used to stay stale until the next 60 s poll.
+
+
+def _keep_settings(status: bool) -> EoliaCustomSettings:
+    return EoliaCustomSettings.from_dict(
+        {
+            "double_mode_temp": {"status": status, "high": 28 if status else 0, "low": 23 if status else 0},
+            "peak_cut": 100,
+        }
+    )
+
+
+async def test_entering_keep_mode_rereads_status_so_the_mode_updates_at_once(
+    coordinator, initial_status
+):
+    cooling = _with(initial_status, operation_mode="Cooling")
+    coordinator.async_set_updated_data({APPLIANCE_ID: cooling})
+    coordinator.custom_settings[APPLIANCE_ID] = _keep_settings(False)
+    coordinator.api.async_set_custom_settings.return_value = _keep_settings(True)
+    coordinator.api.async_get_status.return_value = _with(
+        initial_status, operation_mode="KeepMode", temperature=0.0
+    )
+
+    listener_calls = []
+    remove = coordinator.async_add_listener(lambda: listener_calls.append(1))
+    try:
+        await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=True)
+        assert coordinator.data[APPLIANCE_ID].operation_mode == "KeepMode"
+        assert listener_calls
+    finally:
+        remove()
+    coordinator.api.async_get_status.assert_awaited_once_with(APPLIANCE_ID)
+
+
+async def test_status_reread_retries_while_the_server_still_reports_the_old_mode(
+    coordinator, initial_status
+):
+    coordinator.async_set_updated_data({APPLIANCE_ID: _with(initial_status, operation_mode="Cooling")})
+    coordinator.custom_settings[APPLIANCE_ID] = _keep_settings(False)
+    coordinator.api.async_set_custom_settings.return_value = _keep_settings(True)
+    stale = _with(initial_status, operation_mode="Cooling")
+    fresh = _with(initial_status, operation_mode="KeepMode", temperature=0.0)
+    coordinator.api.async_get_status.side_effect = [stale, stale, fresh]
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=True)
+
+    assert coordinator.api.async_get_status.await_count == 3
+    assert coordinator.data[APPLIANCE_ID].operation_mode == "KeepMode"
+
+
+async def test_status_reread_gives_up_after_a_few_tries_but_keeps_the_freshest(
+    coordinator, initial_status
+):
+    coordinator.async_set_updated_data({APPLIANCE_ID: _with(initial_status, operation_mode="Cooling")})
+    coordinator.custom_settings[APPLIANCE_ID] = _keep_settings(False)
+    coordinator.api.async_set_custom_settings.return_value = _keep_settings(True)
+    coordinator.api.async_get_status.return_value = _with(initial_status, operation_mode="Cooling")
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=True)
+
+    assert coordinator.api.async_get_status.await_count == 3  # bounded, not forever
+
+
+async def test_turning_keep_mode_off_expects_a_non_keep_mode(coordinator, initial_status):
+    keep = _with(initial_status, operation_mode="KeepMode", temperature=0.0)
+    coordinator.async_set_updated_data({APPLIANCE_ID: keep})
+    coordinator.custom_settings[APPLIANCE_ID] = _keep_settings(True)
+    coordinator.api.async_set_custom_settings.return_value = _keep_settings(False)
+    coordinator.api.async_get_status.return_value = _with(
+        initial_status, operation_mode="Stop", operation_status=False
+    )
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=False)
+
+    coordinator.api.async_get_status.assert_awaited_once()  # matched on the first read
+    assert coordinator.data[APPLIANCE_ID].operation_mode == "Stop"
+
+
+async def test_moving_the_range_alone_does_not_reread_status(coordinator, initial_status):
+    keep = _with(initial_status, operation_mode="KeepMode", temperature=0.0)
+    coordinator.async_set_updated_data({APPLIANCE_ID: keep})
+    coordinator.custom_settings[APPLIANCE_ID] = _keep_settings(True)
+    coordinator.api.async_set_custom_settings.return_value = EoliaCustomSettings.from_dict(
+        {"double_mode_temp": {"status": True, "high": 28, "low": 22}, "peak_cut": 100}
+    )
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_low=22)
+
+    coordinator.api.async_get_status.assert_not_awaited()
+
+
+async def test_a_failed_status_reread_does_not_fail_the_write(coordinator, initial_status):
+    cooling = _with(initial_status, operation_mode="Cooling")
+    coordinator.async_set_updated_data({APPLIANCE_ID: cooling})
+    coordinator.custom_settings[APPLIANCE_ID] = _keep_settings(False)
+    new_settings = _keep_settings(True)
+    coordinator.api.async_set_custom_settings.return_value = new_settings
+    coordinator.api.async_get_status.side_effect = EoliaApiError(500, "E-X", "boom")
+
+    await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=True)  # no raise
+
+    assert coordinator.custom_settings[APPLIANCE_ID] is new_settings
+    assert coordinator.data[APPLIANCE_ID] is cooling  # the poll will catch up
+
+
+async def test_an_ignored_keep_mode_write_still_raises_after_a_single_reread(
+    coordinator, initial_status
+):
+    coordinator.async_set_updated_data({APPLIANCE_ID: _with(initial_status, operation_mode="Cooling")})
+    coordinator.custom_settings[APPLIANCE_ID] = _keep_settings(False)
+    # the server answers 200 but keeps status False
+    coordinator.api.async_set_custom_settings.return_value = _keep_settings(False)
+    coordinator.api.async_get_status.return_value = _with(initial_status, operation_mode="Cooling")
+
+    with pytest.raises(HomeAssistantError, match="didn't apply"):
+        await coordinator.async_set_custom_settings(APPLIANCE_ID, double_mode_temp_status=True)
+
+    assert coordinator.api.async_get_status.await_count == 1  # no pointless retries
+
+
+async def test_leaving_keep_mode_rereads_customsettings_so_the_switch_follows(
+    coordinator, initial_status
+):
+    keep = _with(initial_status, operation_mode="KeepMode", temperature=0.0)
+    coordinator.async_set_updated_data({APPLIANCE_ID: keep})
+    coordinator.custom_settings[APPLIANCE_ID] = _keep_settings(True)
+    coordinator._temperature_cache[APPLIANCE_ID] = 22.0
+    coordinator.api.async_set_status.return_value = _with(
+        initial_status, operation_mode="Cooling", temperature=22.0
+    )
+    off_again = _keep_settings(False)
+    coordinator.api.async_get_custom_settings.return_value = off_again
+
+    await coordinator.async_set_status(APPLIANCE_ID, operation_status=True, operation_mode="Cooling")
+
+    assert coordinator.custom_settings[APPLIANCE_ID] is off_again
+
+
+async def test_ordinary_status_writes_do_not_refetch_customsettings(coordinator, initial_status):
+    coordinator.async_set_updated_data({APPLIANCE_ID: _with(initial_status, operation_mode="Cooling")})
+    coordinator.api.async_set_status.return_value = _with(
+        initial_status, operation_mode="Cooling", wind_volume=3
+    )
+
+    await coordinator.async_set_status(APPLIANCE_ID, wind_volume=3)
+
+    coordinator.api.async_get_custom_settings.assert_not_awaited()

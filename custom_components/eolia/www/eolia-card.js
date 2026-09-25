@@ -16,13 +16,15 @@
  *     and that copy live -- this card holds none of them, so it can't drift from the integration.
  *
  * Top to bottom:
- *   1. Setpoint: target temperature, or -- when the mode uses one instead -- the Dry humidity
- *      target or the double-temperature low/high. Big +/- steppers; taps are debounced into one
- *      write (each write to the unit takes ~3 s).
+ *   1. Setpoint: Home Assistant's own round dial (`ha-control-circular-slider`, the one the
+ *      climate card uses) for the target temperature, or -- when the mode uses one instead --
+ *      the Dry humidity target or the double-temperature low/high (two-thumb dial). Drag it or
+ *      use -/+; changes are debounced into one write (each write to the unit takes ~3 s).
  *   2. Mode picker (like the app's mode grid) plus an Off button, with a tooltip per mode.
- *   3. Airflow: fan speed and both louvers, as labelled rows.
- *   4. Stock `entities` card for the remaining switches/selects, and a `glance` of the room.
- * Steps 1-3 are custom; 4 reuses Home Assistant's own cards.
+ *   3. Stock `entities` card: fan speed, louvers, AI mode, airflow mode, targeting, nanoeX...
+ *      (all real select/switch entities, so they get HA's own labelled rows), and a stock
+ *      `glance` of the room.
+ * Steps 1-2 are custom; 3 reuses Home Assistant's own cards.
  *
  * If the sensor or its attributes are missing (older integration version), every control is
  * shown rather than none, and there are no tooltips.
@@ -35,35 +37,24 @@
  *                               # is missing (or has none) falls back to a tinted mdi icon.
  */
 
-const CARD_VERSION = "0.4.0";
+const CARD_VERSION = "0.7.0";
 
 // Entity rows in the stock settings card, in display order. Each is a translation_key, which is
 // also its id in the `controls` list. (The Dry humidity target and the double-temperature
-// low/high are steppers in the setpoint section instead.)
+// low/high are on the setpoint dial instead.)
 const SETTINGS_ROWS = [
+  "fan_speed",
+  "vertical_louver",
+  "horizontal_louver",
   "ai_mode",
-  "nanoex",
-  "silence_control",
   "air_flow",
   "wind_shield_hit",
+  "nanoex",
+  "silence_control",
   "air_quality_monitor",
-  "double_temp_enabled",
 ];
 
 const ROOM_KEYS = ["indoor_temperature", "indoor_humidity", "outdoor_temperature"];
-
-// The climate entity's own airflow attributes, as labelled rows. `gate` is the control id.
-const AIRFLOW_ROWS = [
-  { gate: "fan", label: "Fan speed", attr: "fan_mode", list: "fan_modes", service: "set_fan_mode" },
-  { gate: "louvers", label: "Vertical louver", attr: "swing_mode", list: "swing_modes", service: "set_swing_mode" },
-  {
-    gate: "louvers",
-    label: "Horizontal louver",
-    attr: "swing_horizontal_mode",
-    list: "swing_horizontal_modes",
-    service: "set_swing_horizontal_mode",
-  },
-];
 
 // How each preset (= operation_mode) looks in the picker. `icon` is a file name (no extension)
 // under <icons>/modes/ from tools/extract_icons.py -- only modes the app actually has an icon
@@ -102,22 +93,29 @@ const CSS = `
 .eolia-mode .ico{width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--accent)}
 .eolia-mode img{width:36px;height:36px;object-fit:contain}
 .eolia-mode ha-icon{--mdc-icon-size:32px}
-.eolia-setpoint{padding:12px 12px 16px;text-align:center}
-.eolia-head{font-size:13px;color:var(--secondary-text-color);margin-bottom:4px}
-.eolia-steppers{display:flex;justify-content:center;gap:24px;flex-wrap:wrap}
-.eolia-slabel{font-size:12px;color:var(--secondary-text-color)}
-.eolia-sctl{display:flex;align-items:center;justify-content:center;gap:12px}
-.eolia-val{font-size:40px;font-weight:300;line-height:1.1;min-width:3.5ch;color:var(--primary-text-color)}
+.eolia-setpoint{padding:12px 12px 16px;display:flex;flex-direction:column;align-items:center}
+.eolia-dial{position:relative;width:min(320px,100%);
+  --control-circular-slider-color:var(--eolia-accent,var(--primary-color))}
+.eolia-dial ha-control-circular-slider{display:block;width:100%}
+.eolia-info{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:4px;pointer-events:none;color:var(--primary-text-color)}
+.eolia-head{font-size:14px;font-weight:500;text-align:center;max-width:60%}
+.eolia-val{font-size:44px;font-weight:300;line-height:1.1;white-space:nowrap}
 .eolia-val small{font-size:16px;margin-left:2px;color:var(--secondary-text-color)}
-.eolia-step{width:44px;height:44px;border-radius:50%;border:1px solid var(--divider-color);
-  background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer;
-  display:flex;align-items:center;justify-content:center;padding:0}
+.eolia-sub{font-size:13px;color:var(--secondary-text-color);min-height:1.2em}
+.eolia-buttons{position:absolute;bottom:10px;left:0;right:0;display:flex;justify-content:center;
+  gap:24px;pointer-events:none}
+.eolia-buttons>*{pointer-events:auto}
+.eolia-step{width:48px;height:48px;border-radius:50%;border:1px solid var(--divider-color);
+  background:transparent;color:var(--primary-text-color);cursor:pointer;display:flex;
+  align-items:center;justify-content:center;padding:0}
 .eolia-step[disabled]{opacity:.35;cursor:default}
-.eolia-airflow{padding:4px 16px}
-.eolia-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0}
-.eolia-row label{color:var(--primary-text-color)}
-.eolia-row select{background:var(--secondary-background-color);color:var(--primary-text-color);
-  border:1px solid var(--divider-color);border-radius:8px;padding:6px 8px;font:inherit;min-width:9em}
+.eolia-mini,.eolia-mini-spacer{min-height:64px;margin-top:8px}
+.eolia-mini{display:flex;justify-content:center;gap:24px;flex-wrap:wrap}
+.eolia-mini .eolia-slabel{font-size:12px;color:var(--secondary-text-color);text-align:center}
+.eolia-mini .eolia-sctl{display:flex;align-items:center;gap:8px}
+.eolia-mini .eolia-step{width:36px;height:36px}
+.eolia-mini .eolia-mval{min-width:3.2em;text-align:center;font-size:18px}
 `;
 
 const decimals = (step) => (String(step).split(".")[1] || "").length;
@@ -250,14 +248,28 @@ class EoliaCard extends HTMLElement {
 
   // --- 1. Setpoint -----------------------------------------------------------------------
 
-  /** What the top control adjusts right now: {heading, steppers[]}, or null for nothing. */
+  _stateNumber(entityId) {
+    const st = entityId && this._hass.states[entityId];
+    const value = st ? parseFloat(st.state) : NaN;
+    return Number.isNaN(value) ? undefined : value;
+  }
+
+  /**
+   * What the dial shows right now, or null only if the climate entity is missing:
+   * {heading, dual, disabled, unit, accent, current, steppers[{key,label,value,min,max,step,send}]}.
+   * When the mode has no target (odor care, off, ...) it is a `disabled` spec: the dial stays
+   * on screen greyed out, so the card's layout never changes with the mode.
+   */
   _setpoint(ent, controls) {
     const states = this._hass.states;
     const has = (id) => controls !== null && controls.has(id);
+    const climate = states[ent.climate];
+    const mode = climate && climate.attributes.preset_mode;
+    const accent = (MODE_STYLE[mode] || DEFAULT_MODE_STYLE).color;
     const numberStepper = (key, label) => {
       const st = ent[key] && states[ent[key]];
-      const value = st ? parseFloat(st.state) : NaN;
-      if (Number.isNaN(value)) return null;
+      const value = this._stateNumber(ent[key]);
+      if (value === undefined) return null;
       const a = st.attributes;
       return {
         key,
@@ -270,109 +282,321 @@ class EoliaCard extends HTMLElement {
         send: (v) => this._call("number", "set_value", { entity_id: ent[key], value: v }),
       };
     };
+    const tempUnit =
+      (this._hass.config && this._hass.config.unit_system && this._hass.config.unit_system.temperature) || "°C";
+    if (!climate) return null;
+    const ca = climate.attributes;
+    const current = (key) => this._stateNumber(ent[key]);
+    // Same shape as the temperature dial, so switching between "has a target" and "has none"
+    // reuses the dial instead of rebuilding it.
+    const disabledSpec = {
+      heading: climate.state === "off" ? "Off" : "No target in this mode",
+      dual: false,
+      disabled: true,
+      unit: tempUnit,
+      accent: "var(--disabled-color)",
+      current: current("indoor_temperature"),
+      steppers: [
+        {
+          key: "temperature",
+          label: "",
+          value: ca.min_temp ?? 16,
+          min: ca.min_temp ?? 16,
+          max: ca.max_temp ?? 30,
+          step: ca.target_temp_step ?? 0.5,
+          send: () => {},
+        },
+      ],
+    };
 
     if (has("double_temp_low")) {
       const steppers = [numberStepper("double_temp_low", "Low"), numberStepper("double_temp_high", "High")];
-      return { heading: "Keep the room between", steppers: steppers.filter(Boolean) };
-    }
-    if (has("dry_humidity_target")) {
-      const s = numberStepper("dry_humidity_target", "");
-      return { heading: "Humidity target", steppers: s ? [s] : [] };
-    }
-    if (controls === null || controls.has("temperature")) {
-      const climate = states[ent.climate];
-      const a = climate && climate.attributes;
-      if (a && typeof a.temperature === "number") {
-        const unit = (this._hass.config && this._hass.config.unit_system && this._hass.config.unit_system.temperature) || "°C";
+      if (steppers.every(Boolean)) {
         return {
-          heading: "Target temperature",
-          steppers: [
-            {
-              key: "temperature",
-              label: "",
-              value: a.temperature,
-              unit,
-              min: a.min_temp ?? 16,
-              max: a.max_temp ?? 30,
-              step: a.target_temp_step ?? 0.5,
-              send: (v) => this._call("climate", "set_temperature", { entity_id: ent.climate, temperature: v }),
-            },
-          ],
+          heading: "Keep the room between",
+          dual: true,
+          // low/high must be this far apart; the integration says how far (const.py) and also
+          // nudges the other bound server-side -- we mirror it here so the dial moves at once.
+          minGap: this._operationModeAttrs(ent).double_temp_min_gap,
+          disabled: false,
+          unit: tempUnit,
+          accent,
+          current: current("indoor_temperature"),
+          steppers,
         };
       }
+    } else if (has("dry_humidity_target")) {
+      const stepper = numberStepper("dry_humidity_target", "");
+      if (stepper) {
+        return {
+          heading: "Humidity target",
+          dual: false,
+          disabled: false,
+          unit: stepper.unit || "%",
+          accent,
+          current: current("indoor_humidity"),
+          steppers: [stepper],
+        };
+      }
+    } else if ((controls === null || controls.has("temperature")) && typeof ca.temperature === "number") {
+      return {
+        heading: "Target temperature",
+        dual: false,
+        disabled: false,
+        unit: tempUnit,
+        accent,
+        current: current("indoor_temperature"),
+        steppers: [
+          {
+            ...disabledSpec.steppers[0],
+            value: ca.temperature,
+            send: (v) => this._call("climate", "set_temperature", { entity_id: ent.climate, temperature: v }),
+          },
+        ],
+      };
     }
-    return null;
+    return disabledSpec;
   }
 
-  /** One tap: move the shown value locally now, send a single write once taps stop. */
-  _bump(stepper, direction) {
+  /**
+   * Move the shown value locally now; send ONE write once changes stop for DEBOUNCE_MS.
+   * `linked` are other values shown moved by this change (the other double-temp bound, pushed
+   * to keep the gap): shown locally, never sent themselves -- the coordinator makes the same
+   * nudge server-side -- and dropped together with this edit.
+   */
+  _commit(stepper, raw, linked = []) {
+    if (!Number.isFinite(raw)) return;
+    const next = snap(raw, stepper.step, stepper.min, stepper.max);
     const edit = (this._edits[stepper.key] ||= {});
-    const base = edit.value ?? stepper.value;
-    const next = snap(base + direction * stepper.step, stepper.step, stepper.min, stepper.max);
-    if (next === base) return;
-    edit.value = next;
     clearTimeout(edit.timer);
+    edit.value = next;
+    edit.linked = linked.map((l) => l.key);
+    for (const l of linked) this._edits[l.key] = { value: l.value };
     edit.timer = setTimeout(async () => {
       await stepper.send(next);
       delete this._edits[stepper.key];
+      // a linked value that has since been moved by its own change keeps that (it has a timer)
+      for (const key of edit.linked) if (this._edits[key] && !this._edits[key].timer) delete this._edits[key];
       this._render();
     }, DEBOUNCE_MS);
     this._render();
   }
 
+  /**
+   * Both bounds after moving bound `index` to `raw`, keeping them `sp.minGap` apart: the other
+   * bound is pushed (as the coordinator does server-side); if it hits its own limit the moved
+   * one is held back instead. No minGap known -> no enforcement (the server still nudges).
+   */
+  _withGap(sp, index, raw) {
+    const [lo, hi] = sp.steppers;
+    let low = index === 0 ? snap(raw, lo.step, lo.min, lo.max) : this._shown(lo);
+    let high = index === 1 ? snap(raw, hi.step, hi.min, hi.max) : this._shown(hi);
+    const gap = sp.minGap;
+    if (Number.isFinite(gap) && high - low < gap) {
+      if (index === 0) {
+        high = snap(low + gap, hi.step, hi.min, hi.max);
+        if (high - low < gap) low = snap(high - gap, lo.step, lo.min, lo.max);
+      } else {
+        low = snap(high - gap, lo.step, lo.min, lo.max);
+        if (high - low < gap) high = snap(low + gap, hi.step, hi.min, hi.max);
+      }
+    }
+    return [low, high];
+  }
+
+  /** A double-temperature change: show the gap-corrected pair now, send only the moved bound. */
+  _commitDual(sp, index, raw) {
+    if (!Number.isFinite(raw)) return;
+    const pair = this._withGap(sp, index, raw);
+    const other = 1 - index;
+    this._commit(sp.steppers[index], pair[index], [{ key: sp.steppers[other].key, value: pair[other] }]);
+  }
+
+  /** A -/+ tap, relative to what's currently shown (so rapid taps accumulate). */
+  _bump(stepper, direction) {
+    const base = this._shown(stepper);
+    const next = snap(base + direction * stepper.step, stepper.step, stepper.min, stepper.max);
+    if (next === base) return;
+    const sp = this._views.setpoint && this._views.setpoint.sp;
+    const index = sp && sp.dual ? sp.steppers.findIndex((s) => s.key === stepper.key) : -1;
+    if (index >= 0) this._commitDual(sp, index, next);
+    else this._commit(stepper, next);
+  }
+
   _renderSetpoint(ent, wrapper, controls) {
-    const setpoint = this._setpoint(ent, controls);
-    if (!setpoint || !setpoint.steppers.length) {
+    const sp = this._setpoint(ent, controls);
+    if (!sp) {
       wrapper.hidden = true;
       return;
     }
     wrapper.hidden = false;
-    const shown = (s) => (this._edits[s.key] ? this._edits[s.key].value : s.value);
-    const key = JSON.stringify([setpoint.heading, setpoint.steppers.map((s) => [s.key, shown(s), s.min, s.max, s.step, s.unit])]);
-    this._rebuild("setpoint", wrapper, key, () => {
-      const root = document.createElement("div");
-      root.className = "eolia-setpoint";
-      const head = document.createElement("div");
-      head.className = "eolia-head";
-      head.textContent = setpoint.heading;
-      const row = document.createElement("div");
-      row.className = "eolia-steppers";
-      for (const s of setpoint.steppers) {
-        const value = shown(s);
+    const view = (this._views.setpoint ||= {});
+    view.sp = sp; // handlers created below always read the latest spec from here
+    // Build once per shape; afterwards update in place, so a poll can't interrupt a drag.
+    const shape = JSON.stringify([sp.dual, sp.steppers.map((s) => [s.key, s.min, s.max, s.step])]);
+    if (view.shape !== shape) {
+      view.shape = shape;
+      if (!view.card) {
+        view.card = document.createElement("ha-card");
+        wrapper.appendChild(view.card);
+      }
+      view.card.replaceChildren(this._buildSetpoint(view));
+    }
+    this._updateSetpoint(view);
+  }
+
+  _stepButton(direction, onClick) {
+    const button = document.createElement("button");
+    button.className = "eolia-step";
+    button.setAttribute("aria-label", direction < 0 ? "Decrease" : "Increase");
+    const glyph = document.createElement("ha-icon");
+    glyph.setAttribute("icon", direction < 0 ? "mdi:minus" : "mdi:plus");
+    button.appendChild(glyph);
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  /** Static structure; every value is filled in by _updateSetpoint. Handlers read view.sp. */
+  _buildSetpoint(view) {
+    const dual = view.sp.dual;
+    const refs = (view.refs = { minis: [] });
+    const root = document.createElement("div");
+    root.className = "eolia-setpoint";
+    const dial = document.createElement("div");
+    dial.className = "eolia-dial";
+    refs.dial = dial;
+
+    const slider = document.createElement("ha-control-circular-slider");
+    slider.preventInteractionOnScroll = true;
+    refs.slider = slider;
+    // The dial's events can arrive without a usable value (e.g. at the start or end of a
+    // drag); ignore those instead of formatting/writing garbage.
+    const usable = (values) => values.every((v) => Number.isFinite(v));
+    const live = (values) => {
+      if (!usable(values)) return;
+      this._dragging = true;
+      refs.showValues(values);
+    };
+    if (dual) {
+      slider.setAttribute("dual", "");
+      slider.dual = true;
+      // While a thumb is dragged, the other one is pushed live so the 5-degree rule is visible
+      // immediately instead of after the status round-trip.
+      const liveDual = (index, value) => {
+        if (!Number.isFinite(value)) return;
+        const pair = this._withGap(view.sp, index, value);
+        live(pair);
+        if (index === 0) slider.high = pair[1];
+        else slider.low = pair[0];
+      };
+      slider.addEventListener("low-changing", (e) => liveDual(0, e.detail.value));
+      slider.addEventListener("high-changing", (e) => liveDual(1, e.detail.value));
+      slider.addEventListener("low-changed", (e) => { this._dragging = false; this._commitDual(view.sp, 0, e.detail.value); });
+      slider.addEventListener("high-changed", (e) => { this._dragging = false; this._commitDual(view.sp, 1, e.detail.value); });
+    } else {
+      slider.mode = "start";
+      slider.addEventListener("value-changing", (e) => live([e.detail.value]));
+      slider.addEventListener("value-changed", (e) => { this._dragging = false; this._commit(view.sp.steppers[0], e.detail.value); });
+    }
+
+    const info = document.createElement("div");
+    info.className = "eolia-info";
+    refs.head = document.createElement("div");
+    refs.head.className = "eolia-head";
+    refs.val = document.createElement("div");
+    refs.val.className = "eolia-val";
+    refs.valText = document.createElement("span");
+    refs.valUnit = document.createElement("small");
+    refs.val.append(refs.valText, refs.valUnit);
+    refs.sub = document.createElement("div");
+    refs.sub.className = "eolia-sub";
+    info.append(refs.head, refs.val, refs.sub);
+    dial.append(slider, info);
+
+    if (!dual) {
+      const buttons = document.createElement("div");
+      buttons.className = "eolia-buttons";
+      refs.minus = this._stepButton(-1, () => this._bump(view.sp.steppers[0], -1));
+      refs.plus = this._stepButton(1, () => this._bump(view.sp.steppers[0], 1));
+      buttons.append(refs.minus, refs.plus);
+      dial.appendChild(buttons);
+    }
+    root.appendChild(dial);
+
+    if (!dual) {
+      // The two-thumb layout has a row of Low/High steppers under the dial; keep the same
+      // height here so switching modes never moves what's below.
+      const spacer = document.createElement("div");
+      spacer.className = "eolia-mini-spacer";
+      root.appendChild(spacer);
+    }
+    if (dual) {
+      // The dial has no room for two sets of -/+ buttons, so each bound gets its own small one.
+      const mini = document.createElement("div");
+      mini.className = "eolia-mini";
+      view.sp.steppers.forEach((s, i) => {
         const box = document.createElement("div");
-        if (s.label) {
-          const label = document.createElement("div");
-          label.className = "eolia-slabel";
-          label.textContent = s.label;
-          box.appendChild(label);
-        }
+        const label = document.createElement("div");
+        label.className = "eolia-slabel";
+        label.textContent = s.label;
         const ctl = document.createElement("div");
         ctl.className = "eolia-sctl";
-        const step = (direction, icon, disabled) => {
-          const button = document.createElement("button");
-          button.className = "eolia-step";
-          button.setAttribute("aria-label", direction < 0 ? "Decrease" : "Increase");
-          button.disabled = disabled;
-          const glyph = document.createElement("ha-icon");
-          glyph.setAttribute("icon", icon);
-          button.appendChild(glyph);
-          button.addEventListener("click", () => this._bump(s, direction));
-          return button;
-        };
-        const val = document.createElement("span");
-        val.className = "eolia-val";
-        val.textContent = value.toFixed(decimals(s.step));
-        if (s.unit) {
-          const unit = document.createElement("small");
-          unit.textContent = s.unit;
-          val.appendChild(unit);
-        }
-        ctl.append(step(-1, "mdi:minus", value <= s.min), val, step(1, "mdi:plus", value >= s.max));
-        box.appendChild(ctl);
-        row.appendChild(box);
+        const m = { minus: this._stepButton(-1, () => this._bump(view.sp.steppers[i], -1)), plus: this._stepButton(1, () => this._bump(view.sp.steppers[i], 1)) };
+        m.val = document.createElement("span");
+        m.val.className = "eolia-mval";
+        ctl.append(m.minus, m.val, m.plus);
+        box.append(label, ctl);
+        mini.appendChild(box);
+        refs.minis.push(m);
+      });
+      root.appendChild(mini);
+    }
+    return root;
+  }
+
+  /** The value to show for a stepper: the pending edit if there is one, else the state. */
+  _shown(stepper) {
+    return this._edits[stepper.key] ? this._edits[stepper.key].value : stepper.value;
+  }
+
+  _updateSetpoint(view) {
+    const { refs, sp } = view;
+    const fmt = (s, v) => v.toFixed(decimals(s.step));
+    const shown = sp.steppers.map((s) => this._shown(s));
+    refs.showValues = (values) => {
+      refs.valText.textContent = values.map((v, i) => fmt(sp.steppers[i], v)).join(" – ");
+    };
+    refs.head.textContent = sp.heading;
+    refs.valUnit.textContent = sp.disabled ? "" : sp.unit;
+    refs.slider.disabled = !!sp.disabled;
+    refs.sub.textContent =
+      sp.current !== undefined ? `Currently ${sp.current}${sp.unit}` : "";
+    refs.slider.min = Math.min(...sp.steppers.map((s) => s.min));
+    refs.slider.max = Math.max(...sp.steppers.map((s) => s.max));
+    refs.slider.step = sp.steppers[0].step;
+    refs.slider.current = sp.current;
+    refs.dial.style.setProperty("--eolia-accent", sp.accent);
+    if (sp.disabled) {
+      refs.valText.textContent = "–";
+    } else if (!this._dragging) {
+      // Never touch the dial mid-drag: a poll landing then would yank the thumb.
+      if (sp.dual) {
+        refs.slider.low = shown[0];
+        refs.slider.high = shown[1];
+      } else {
+        refs.slider.value = shown[0];
       }
-      root.append(head, row);
-      return [root];
+      refs.showValues(shown);
+    }
+    if (refs.minus) {
+      refs.minus.disabled = sp.disabled || shown[0] <= sp.steppers[0].min;
+      refs.plus.disabled = sp.disabled || shown[0] >= sp.steppers[0].max;
+    }
+    refs.minis.forEach((m, i) => {
+      const s = sp.steppers[i];
+      m.val.textContent = `${fmt(s, shown[i])}${sp.unit}`;
+      m.minus.disabled = shown[i] <= s.min;
+      m.plus.disabled = shown[i] >= s.max;
     });
   }
 
@@ -409,6 +633,9 @@ class EoliaCard extends HTMLElement {
         button.addEventListener("click", onClick);
         grid.appendChild(button);
       };
+      // Off first, then the modes in the order the integration lists them (const.PRESET_MODE_ORDER;
+      // the card keeps no ordering of its own).
+      add(OFF_STYLE, "Off", "Turn the unit off.", isOff, () => this._turnOff(ent.climate, isOff));
       for (const mode of presets) {
         add(
           MODE_STYLE[mode] || DEFAULT_MODE_STYLE,
@@ -418,7 +645,6 @@ class EoliaCard extends HTMLElement {
           () => this._selectMode(ent.climate, mode, current)
         );
       }
-      add(OFF_STYLE, "Off", "Turn the unit off.", isOff, () => this._turnOff(ent.climate, isOff));
       return [grid];
     });
   }
@@ -447,47 +673,6 @@ class EoliaCard extends HTMLElement {
     await this._withPending("off", () => this._call("climate", "turn_off", { entity_id: entityId }));
   }
 
-  // --- 3. Airflow ----------------------------------------------------------------------------
-
-  _renderAirflow(ent, wrapper, controls) {
-    const climate = this._hass.states[ent.climate];
-    const allows = (id) => controls === null || controls.has(id);
-    const rows = AIRFLOW_ROWS.filter(
-      (r) => allows(r.gate) && climate && Array.isArray(climate.attributes[r.list]) && climate.attributes[r.list].length
-    );
-    if (!rows.length) {
-      wrapper.hidden = true;
-      return;
-    }
-    wrapper.hidden = false;
-    const key = JSON.stringify(rows.map((r) => [r.attr, climate.attributes[r.attr], climate.attributes[r.list]]));
-    this._rebuild("airflow", wrapper, key, () => {
-      const root = document.createElement("div");
-      root.className = "eolia-airflow";
-      for (const r of rows) {
-        const row = document.createElement("div");
-        row.className = "eolia-row";
-        const label = document.createElement("label");
-        label.textContent = r.label;
-        const select = document.createElement("select");
-        select.setAttribute("aria-label", r.label);
-        for (const value of climate.attributes[r.list]) {
-          const option = document.createElement("option");
-          option.value = String(value);
-          option.textContent = this._label(climate, r.attr, value);
-          select.appendChild(option);
-        }
-        select.value = String(climate.attributes[r.attr]);
-        select.addEventListener("change", () =>
-          this._call("climate", r.service, { entity_id: ent.climate, [r.attr]: select.value })
-        );
-        row.append(label, select);
-        root.appendChild(row);
-      }
-      return [root];
-    });
-  }
-
   // --- Layout ------------------------------------------------------------------------------
 
   _showError(text) {
@@ -501,7 +686,6 @@ class EoliaCard extends HTMLElement {
     return [
       { id: "setpoint", render: (ent, wrapper, controls) => this._renderSetpoint(ent, wrapper, controls) },
       { id: "modes", render: (ent, wrapper, controls) => this._renderPicker(ent, wrapper, controls) },
-      { id: "airflow", render: (ent, wrapper, controls) => this._renderAirflow(ent, wrapper, controls) },
       {
         id: "settings",
         config: ({ ent, allows }) => {
@@ -520,8 +704,15 @@ class EoliaCard extends HTMLElement {
     ];
   }
 
-  async _buildSlots() {
+  async _buildSlots(ent) {
     const helpers = await window.loadCardHelpers();
+    // The circular slider is only defined once HA has loaded its thermostat card, so ask for
+    // one (never attached to the page). If it isn't defined the -/+ buttons still work.
+    try {
+      helpers.createCardElement({ type: "thermostat", entity: ent.climate });
+    } catch (err) {
+      /* the dial just stays a plain box */
+    }
     return this._slotDefs().map((def) => {
       const wrapper = document.createElement("div");
       wrapper.hidden = true;
@@ -549,7 +740,7 @@ class EoliaCard extends HTMLElement {
       this._resolvedJson = json;
       this._slots = null;
       this._views = {};
-      const building = this._buildSlots();
+      const building = this._buildSlots(ent);
       this._building = building;
       const slots = await building;
       if (this._building !== building) return; // superseded by a newer resolve

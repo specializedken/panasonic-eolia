@@ -28,6 +28,7 @@ from .const import (
     DOMAIN,
     DOUBLE_MODE_TEMP_HIGH_RANGE,
     DOUBLE_MODE_TEMP_LOW_RANGE,
+    DOUBLE_MODE_TEMP_MIN_GAP,
     DRY_MODE_HUMIDITY_RANGE,
     ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW,
     FALLBACK_TEMPERATURE,
@@ -52,6 +53,11 @@ _LOGGER = logging.getLogger(__name__)
 # error never gets auto-retried (resending an identical bad request won't help, and
 # repeated failed writes against production infra should stay a conscious action).
 _NETWORK_RETRY_DELAY_SECONDS = 2
+# After a /customsettings write that turns KeepMode on or off, /status (which holds the mode
+# every entity and the card render from) is re-read; the server may take a moment to reflect
+# the change, so retry a couple of times before settling for whatever it returned.
+_RESYNC_ATTEMPTS = 3
+_RESYNC_DELAY_SECONDS = 2.0
 
 
 _KEEP_MODE_ERROR = (
@@ -310,6 +316,8 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 return
             raise HomeAssistantError(_KEEP_MODE_ERROR)
 
+        was_keep_mode = current.operation_mode == EoliaOperationMode.KEEP_MODE
+
         payload = current.to_control_fields()
         payload["silence_control"] = self.get_silence_control(appliance_id)
         token = self._operation_token_cache.get(appliance_id)
@@ -377,6 +385,13 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         updated[appliance_id] = new_status
         self.async_set_updated_data(updated)
 
+        if was_keep_mode and new_status.operation_mode != EoliaOperationMode.KEEP_MODE:
+            # Leaving KeepMode resets the stored double-temperature range and turns its
+            # switch off server-side; re-read /customsettings so the switch and sliders
+            # don't stay stale until the next poll.
+            await self._async_refresh_custom_settings(appliance_id)
+            self.async_update_listeners()
+
         # A requested mode can come back different with a 200 and no error code -- the same
         # "server accepts a request but doesn't apply it" class of bug guarded against for
         # double_mode_temp below. (MoistCooling was once seen downgrading to Cooling on
@@ -426,6 +441,36 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         if ignored:
             raise HomeAssistantError("; ".join(ignored))
 
+    async def _async_resync_status(
+        self, appliance_id: str, *, expect_keep_mode: bool, attempts: int = _RESYNC_ATTEMPTS
+    ) -> None:
+        """Re-read /status after a /customsettings write that toggled KeepMode.
+
+        KeepMode is entered and left through /customsettings, but the operation_mode, the
+        card's dial variant and the `controls` list all come from /status. Without this the
+        old mode stayed on screen until the next 60 s poll (Kevin saw ~10 s lag, 2026-09-24).
+        A failed read is non-fatal: the write itself succeeded, the poll will catch up.
+        """
+        status = None
+        for attempt in range(attempts):
+            if attempt:
+                await asyncio.sleep(_RESYNC_DELAY_SECONDS)
+            try:
+                status = await self.api.async_get_status(appliance_id)
+            except (EoliaApiError, EoliaAuthError) as err:
+                _LOGGER.debug("Couldn't re-read status for %s after customsettings: %s", appliance_id, err)
+                return
+            if (status.operation_mode == EoliaOperationMode.KEEP_MODE) == expect_keep_mode:
+                break
+        if status is None:
+            return
+        self._remember_temperature(appliance_id, status)
+        self._remember_mode(appliance_id, status)
+        self._remember_humidity(appliance_id, status)
+        updated = dict(self.data or {})
+        updated[appliance_id] = status
+        self.async_set_updated_data(updated)
+
     async def _async_set_custom_settings(self, appliance_id: str, **changes: Any) -> None:
         """Apply `changes` on top of the last-known .../customsettings and PUT the result.
 
@@ -437,6 +482,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         current = self.custom_settings.get(appliance_id)
         if current is None:
             current = await self.api.async_get_custom_settings(appliance_id)
+        toggles_keep_mode = "double_mode_temp_status" in changes
 
         payload = current.to_control_fields()
         token = self._operation_token_cache.get(appliance_id)
@@ -468,24 +514,24 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         if double_mode_temp["high"] == 0 and double_mode_temp["low"] != 0:
             double_mode_temp["high"] = min(
                 DOUBLE_MODE_TEMP_HIGH_RANGE[1],
-                max(DOUBLE_MODE_TEMP_HIGH_RANGE[0], double_mode_temp["low"] + 5),
+                max(DOUBLE_MODE_TEMP_HIGH_RANGE[0], double_mode_temp["low"] + DOUBLE_MODE_TEMP_MIN_GAP),
             )
         elif double_mode_temp["low"] == 0 and double_mode_temp["high"] != 0:
             double_mode_temp["low"] = max(
                 DOUBLE_MODE_TEMP_LOW_RANGE[0],
-                min(DOUBLE_MODE_TEMP_LOW_RANGE[1], double_mode_temp["high"] - 5),
+                min(DOUBLE_MODE_TEMP_LOW_RANGE[1], double_mode_temp["high"] - DOUBLE_MODE_TEMP_MIN_GAP),
             )
         # Two separate sliders can't both move at once, so moving one bound within 5 degrees
         # of the other (E-21291-02009, live 2026-09-23) nudges the other bound instead,
         # when that stays inside its valid range; otherwise the server's rejection stands.
         if double_mode_temp["high"] and double_mode_temp["low"]:
-            if double_mode_temp["high"] - double_mode_temp["low"] < 5:
+            if double_mode_temp["high"] - double_mode_temp["low"] < DOUBLE_MODE_TEMP_MIN_GAP:
                 if changed_low and not changed_high:
-                    nudged = double_mode_temp["low"] + 5
+                    nudged = double_mode_temp["low"] + DOUBLE_MODE_TEMP_MIN_GAP
                     if nudged <= DOUBLE_MODE_TEMP_HIGH_RANGE[1]:
                         double_mode_temp["high"] = nudged
                 elif changed_high and not changed_low:
-                    nudged = double_mode_temp["high"] - 5
+                    nudged = double_mode_temp["high"] - DOUBLE_MODE_TEMP_MIN_GAP
                     if nudged >= DOUBLE_MODE_TEMP_LOW_RANGE[0]:
                         double_mode_temp["low"] = nudged
         payload["double_mode_temp"] = double_mode_temp
@@ -497,7 +543,7 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
             if getattr(err, "code", None) == ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW:
                 # The server's own message is Japanese-only.
                 raise HomeAssistantError(
-                    "The low and high temperatures must be at least 5 degrees apart "
+                    f"The low and high temperatures must be at least {DOUBLE_MODE_TEMP_MIN_GAP} degrees apart "
                     f"(and inside {DOUBLE_MODE_TEMP_LOW_RANGE[0]}-"
                     f"{DOUBLE_MODE_TEMP_HIGH_RANGE[1]}C)."
                 ) from err
@@ -525,6 +571,12 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
             mismatch = returned["status"] != double_mode_temp["status"]
         else:
             mismatch = returned != double_mode_temp
+        if toggles_keep_mode:
+            await self._async_resync_status(
+                appliance_id,
+                expect_keep_mode=double_mode_temp["status"],
+                attempts=1 if mismatch else _RESYNC_ATTEMPTS,
+            )
         if mismatch:
             raise HomeAssistantError(
                 "Eolia accepted the request but didn't apply it as asked (got back "

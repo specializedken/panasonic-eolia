@@ -447,3 +447,23 @@ async def test_turn_off_in_keep_mode_disables_the_double_temperature_setting(coo
 
     coordinator.api.async_set_status.assert_not_awaited()
     coordinator.api.async_set_custom_settings.assert_awaited_once()
+
+
+def test_preset_modes_follow_the_requested_order():
+    """Kevin's order (2026-09-24); unlisted settable modes follow rather than vanish."""
+    expected_front = [
+        "Auto", "ComfortableDehumidification", "Cooling", "CoolDehumidifying", "MoistCooling",
+        "Heating", "KeepMode", "ClothesDryer", "SmellCare", "NanoexCleaning", "Cleaning",
+    ]  # fmt: skip
+    assert _SETTABLE_PRESET_MODES[: len(expected_front)] == expected_front
+    # every settable mode is still offered exactly once, listed or not
+    assert len(set(_SETTABLE_PRESET_MODES)) == len(_SETTABLE_PRESET_MODES)
+    assert "Blast" in _SETTABLE_PRESET_MODES[len(expected_front):]
+
+
+def test_filtering_by_model_keeps_the_order(coordinator):
+    coordinator.functions[APPLIANCE_ID] = {"smell_care": False, "moist_cooling": False}
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+    modes = entity.preset_modes
+    assert "SmellCare" not in modes and "MoistCooling" not in modes
+    assert modes == [m for m in _SETTABLE_PRESET_MODES if m in modes]

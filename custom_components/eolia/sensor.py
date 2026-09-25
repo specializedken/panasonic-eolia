@@ -24,7 +24,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from . import EoliaConfigEntry
-from .const import OPERATION_MODE_TOOLTIPS, EoliaOperationMode
+from .const import DOUBLE_MODE_TEMP_MIN_GAP, OPERATION_MODE_TOOLTIPS, EoliaOperationMode
 from .controls import applicable_controls
 from .coordinator import EoliaDataUpdateCoordinator
 from .entity import EoliaEntity
@@ -68,6 +68,7 @@ SENSOR_DESCRIPTIONS: tuple[EoliaSensorEntityDescription, ...] = (
         attrs_fn=lambda status: {
             "controls": list(applicable_controls(status)),
             "mode_descriptions": OPERATION_MODE_TOOLTIPS,
+            "double_temp_min_gap": DOUBLE_MODE_TEMP_MIN_GAP,
         },
     ),
     EoliaSensorEntityDescription(

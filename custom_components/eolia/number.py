@@ -143,8 +143,7 @@ class EoliaDryHumidityNumber(EoliaEntity, NumberEntity):
 
     Backed by coordinator.get_humidity() (a local cache, no GET readback exists -- see
     module docstring), not EoliaCustomSettings -- doesn't fit EoliaNumberEntityDescription's
-    pattern above, so it's a dedicated class instead (same reasoning as
-    EoliaDoubleTempEnabledSwitch in switch.py).
+    pattern above, so it's a dedicated class instead.
     """
 
     _attr_translation_key = "dry_humidity_target"
