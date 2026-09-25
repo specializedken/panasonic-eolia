@@ -15,10 +15,10 @@ dropdowns, ...) were later superseded.
 | Card tests (Node) | `tests/js/eolia-card.test.mjs` — `node --test tests/js/` (runs the real card file against a fake DOM and `hass`) |
 | Backend rules the card renders from | `custom_components/eolia/controls.py`, `const.py` (`PRESET_MODE_ORDER`, `OPERATION_MODE_TOOLTIPS`, `DOUBLE_MODE_TEMP_MIN_GAP`), and the `operation_mode` sensor in `sensor.py` |
 | Icon extractor | `tools/extract_icons.py` |
-| Panasonic icons | **not in the repo** — see "Icons" below |
+| Panasonic icons (12 PNGs) | `custom_components/eolia/www/icons/{modes,rows}/`, served at `/eolia_static/icons/` (`frontend.py` registers the folder) |
 
 **Config:** `type: custom:eolia-card`, `entity: climate.<your eolia climate>`, optional
-`icons: /local/eolia-icons` (default) or `icons: false`.
+`icons: /eolia_static/icons` (default: the icons shipped in the integration) or `icons: false`.
 
 **No hardcoded entity ids.** The card finds the device's other entities from `hass.entities` (same
 `device_id`, matched by `translation_key`), because ids depend on the device nickname *and* the
@@ -42,17 +42,22 @@ the attributes (older integration) the card shows everything.
    targeting, nanoeX, quiet mode (plus air-quality monitoring on models that have it), then a stock
    `glance` of indoor temp/humidity and outdoor temp.
 
-**Icons.** Panasonic's artwork is copyrighted, so it is never committed or shipped. `icons/` at the
-repo root is a gitignored local output folder, and on Home Assistant they live in
-`<config>/www/eolia-icons/` (served at `/local/eolia-icons/`). Generate them yourself:
+**Icons.** They are Panasonic's copyrighted artwork. **Since 2026-09-25 (Kevin's call) the 12 the
+card uses are committed and shipped inside the integration** — 8 mode icons (`modes/`) and 4
+settings-row icons (`rows/`, square-padded and recoloured) in `custom_components/eolia/www/icons/` —
+so the card has them out of the box and HACS installs deliver them. Before that they were local-only
+and copied to `<config>/www/eolia-icons/`; older log entries below describe that. Only these 12 are
+tracked: `/icons/` at the repo root (the extractor's full ~100-file output) and `code/` stay
+gitignored. `tests/test_frontend.py` fails if the card references an icon that isn't shipped.
 
-1. Decompile the Eolia APK with `jadx` into `code/` (also gitignored).
-2. `python tools/extract_icons.py` → `icons/modes/` (mode grid) and `icons/rows/` (settings-row icons,
-   square-padded and recoloured; needs Pillow).
-3. Copy `modes/` and `rows/` into `<config>/www/eolia-icons/`.
+To refresh or extend them: decompile the Eolia APK with `jadx` into `code/`, run
+`python tools/extract_icons.py` (row icons need Pillow), and copy the wanted files from `icons/` into
+`custom_components/eolia/www/icons/`.
 
 Missing files degrade gracefully: mode buttons fall back to tinted mdi icons and rows keep HA's own
-icon (each row image is probed by loading it first).
+icon (each row image is probed by loading it first). `icons: false`, or a path to another folder
+with the same `modes/` + `rows/` layout, overrides the default. **If the repository is ever
+republished, remove `www/icons/`** — the rights in that artwork are Panasonic's.
 
 **Deploying a card change:** bump `manifest.json`'s `version` (it is the cache-buster), copy
 `custom_components/eolia/` into the HA config, restart HA if any Python changed (JS alone is served
@@ -70,7 +75,8 @@ can only be checked by eye (no headless browser in this environment); the JS tes
 ## Design log
 
 Chronological notes, moved verbatim from `CLAUDE.md` on 2026-09-25 (the card started as
-`custom:eolia-card` 0.1.0 on 2026-09-24).
+`custom:eolia-card` 0.1.0 on 2026-09-24). **Statements below that the icons are never committed or must
+be copied to `www/eolia-icons/` are out of date** — see "Icons" in the current design above.
 
 - **Update, 2026-09-24 — the Lovelace card (`custom:eolia-card`) built and deployed to europa.**
   Kevin's requirement: hide controls that don't apply to the current mode, and be

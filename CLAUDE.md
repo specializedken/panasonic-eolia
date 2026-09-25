@@ -27,7 +27,7 @@ understanding of the API) was met on 2026-09-23; everything since is integration
 | Python tests | `tests/test_*.py`; fixtures from real traffic in `tests/fixtures/` |
 | Raw live captures | `tests/fixtures/live_captures/` (index in its `README.md`; `39_fuzz_findings.md` is the fuzzing write-up) |
 | Tools (talk to the real cloud/unit) | `tools/` — `eolia_cli.py`, `eolia_fuzz*.py`, `eolia_ab.py`, `eolia_keepmode_probe.py`, `extract_icons.py` |
-| **Panasonic icons** | **Not in the repo.** `icons/` is a gitignored local folder made by `tools/extract_icons.py`; on HA they are copied to `<config>/www/eolia-icons/{modes,rows}/` |
+| **Panasonic icons** | The 12 the card uses are **committed** in `custom_components/eolia/www/icons/{modes,rows}/` and served by the integration (`frontend.py`). `/icons/` at the repo root is the extractor's full local output (~100 files) and stays gitignored |
 | Decompiled app, APK, fuzz logs, tokens | `code/`, `*.apk`, `fuzz_runs/`, `.eolia_tokens.json` — all gitignored |
 | Docs | `docs/` (index: `docs/README.md`) and the top-level `README.md` |
 
@@ -77,8 +77,11 @@ Kevin's actual air conditioner. Get an explicit go-ahead first, and keep writes 
 
 - **Secrets.** `.eolia_tokens.json` holds live tokens: never put its contents in a doc, memory,
   commit or chat.
-- **Panasonic's artwork and the decompiled app are never committed or published.** `icons/`,
-  `code/` and `*.apk` are gitignored; the card must keep working without the icons.
+- **Panasonic's artwork: only the 12 icons the card uses are committed** (`www/icons/`, Kevin's
+  decision 2026-09-25); they are copyrighted, so **never add more**, and never publish or push
+  without Kevin deciding to (if the repo is ever republished, `www/icons/` should be removed). The
+  extractor's full output (`/icons/`), the decompiled app (`code/`) and `*.apk` stay gitignored. The
+  card must keep working without the icons.
 - **One place builds a write.** `coordinator.py` does read-modify-write with a fixed field set:
   `applianceId` is never in the body, `humidity` only in Dry, `silence_control` comes from a local
   cache (it is write-only), and the last `operation_token` is echoed. **All writes are serialised

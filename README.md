@@ -84,19 +84,27 @@ works whatever the device is called. It shows:
 3. **The remaining controls**, and only the ones that apply to the current mode: fan speed, louvers,
    AI mode, airflow mode, targeting, nanoeX, quiet mode, plus the room's temperature and humidity.
 
-### Optional: Panasonic's icons
+### Icons
 
-The card looks nicer with the app's own mode and settings icons, but those are Panasonic's artwork,
-so **they are not included in this repository or the integration**, and the card works fine without
-them (it falls back to standard Home Assistant icons). If you want them you have to extract them
-from your own copy of the app:
+The mode grid and four of the settings rows use icons taken from the official Eolia app: 8 mode icons
+and 4 row icons (the row ones are square-padded and recoloured versions of the app's). They live in
+`custom_components/eolia/www/icons/`, and the integration serves them, so the card has them with no
+setup. **They are Panasonic's artwork**, included for convenience; see the [disclaimer](#disclaimer).
 
-1. Decompile the Eolia Android app with [`jadx`](https://github.com/skylot/jadx) into `code/`.
-2. Run `python tools/extract_icons.py` (the row icons need `pip install Pillow`). This writes a local,
-   git-ignored `icons/` folder.
-3. Copy `icons/modes/` and `icons/rows/` to `config/www/eolia-icons/` in your Home Assistant.
+The card works without them (a mode with no icon, or a missing file, falls back to a standard Home
+Assistant icon), and you can change this in the card config:
 
-Use `icons: /some/other/path` or `icons: false` in the card config to change or disable this.
+```yaml
+type: custom:eolia-card
+entity: climate.your_eolia_climate
+icons: false                  # don't use them
+# icons: /local/my-icons      # or load the same layout (modes/, rows/) from your own folder
+```
+
+To regenerate them from your own copy of the app: decompile it with
+[`jadx`](https://github.com/skylot/jadx) into `code/`, run `python tools/extract_icons.py` (the row
+icons need `pip install Pillow`), and copy the files the card uses from the git-ignored `icons/`
+output into `custom_components/eolia/www/icons/`.
 
 ## Limitations
 
@@ -129,10 +137,11 @@ Where things are:
 |---|---|
 | `custom_components/eolia/` | The integration |
 | `custom_components/eolia/www/eolia-card.js` | **The Lovelace card** (plain JavaScript, no build step); `frontend.py` serves and registers it |
+| `custom_components/eolia/www/icons/` | **The icons the card uses** (12 PNGs, Panasonic's artwork), served by the integration |
 | `tests/` | Python tests; `tests/js/` holds the card's tests; `tests/fixtures/` holds real captured API traffic |
 | `tools/` | Scripts that talk to the real cloud and unit (CLI, fuzzer, icon extractor) — see the warning below |
 | `docs/` | The API reference, the development log and the card's design notes ([index](docs/README.md)) |
-| `icons/` | **Not in the repo** (git-ignored local output of `tools/extract_icons.py`) |
+| `icons/` | Git-ignored local output of `tools/extract_icons.py` (~100 files); only the 12 the card uses are committed, under `www/icons/` above |
 
 **Warning:** the scripts in `tools/` (`eolia_cli.py set`, the fuzzer, the A/B runner) send real
 commands to your air conditioner. Read what they do before running them.
@@ -142,6 +151,11 @@ commands to your air conditioner. Read what they do before running them.
 This project is not affiliated with, endorsed by or supported by Panasonic. *Panasonic*, *Eolia* and
 *nanoeX* are trademarks of Panasonic Holdings Corporation. The integration signs in to Panasonic's
 cloud with your own account and controls your own appliance; use it at your own risk.
+
+The icons in `custom_components/eolia/www/icons/` are copyrighted Panasonic artwork taken from the
+Eolia app. They are included for convenience and are **not** covered by any license this project may
+grant for its code; Panasonic keeps all rights in them. If you republish or redistribute this
+repository, remove that folder (the card still works without it).
 
 ## License
 

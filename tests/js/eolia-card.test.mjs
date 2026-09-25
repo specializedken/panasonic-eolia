@@ -522,7 +522,7 @@ test("modes with an app icon use it from the icons dir; others fall back to mdi"
   const { card } = await render(ALL_RUNNING);
   const auto = iconOf(btn(card, mode("Auto")));
   assert.equal(auto.tag, "img");
-  assert.equal(auto.src, "/local/eolia-icons/modes/v6_drive_mode_automatic.png");
+  assert.equal(auto.src, "/eolia_static/icons/modes/v6_drive_mode_automatic.png");
   assert.equal(iconOf(btn(card, mode("Cooling"))).attrs.icon, "mdi:snowflake"); // the app has no Cooling icon
   assert.equal(iconOf(btn(card, "Off")).attrs.icon, "mdi:power");
 });
@@ -631,10 +631,10 @@ const rowFor = (card, entity) => settingsRows(card).find((r) => (typeof r === "s
 test("row icons are probed by loading them, one per icon-bearing row", async () => {
   const { images } = await render(ALL_RUNNING);
   assert.deepEqual(plain(images.map((i) => i.src).sort()), [
-    "/local/eolia-icons/rows/horizontal_louver.png",
-    "/local/eolia-icons/rows/nanoex.png",
-    "/local/eolia-icons/rows/vertical_louver.png",
-    "/local/eolia-icons/rows/wind_shield_hit.png",
+    "/eolia_static/icons/rows/horizontal_louver.png",
+    "/eolia_static/icons/rows/nanoex.png",
+    "/eolia_static/icons/rows/vertical_louver.png",
+    "/eolia_static/icons/rows/wind_shield_hit.png",
   ]);
 });
 
@@ -643,7 +643,7 @@ test("a row gets its app icon only once the file has actually loaded", async () 
   assert.equal(rowFor(card, KEYS.nanoex), KEYS.nanoex); // plain entity id until it loads
   images.find((i) => i.src.endsWith("/nanoex.png")).onload();
   await card._render();
-  assert.deepEqual(rowFor(card, KEYS.nanoex), { entity: KEYS.nanoex, image: "/local/eolia-icons/rows/nanoex.png" });
+  assert.deepEqual(rowFor(card, KEYS.nanoex), { entity: KEYS.nanoex, image: "/eolia_static/icons/rows/nanoex.png" });
   assert.equal(rowFor(card, KEYS.vertical_louver), KEYS.vertical_louver); // its own file hasn't loaded
 });
 
@@ -678,7 +678,7 @@ test("a row the current mode hides stays hidden even with its icon loaded", asyn
   images.forEach((i) => i.onload());
   await card._render();
   assert.equal(rowFor(card, KEYS.vertical_louver), undefined);
-  assert.deepEqual(rowFor(card, KEYS.nanoex), { entity: KEYS.nanoex, image: "/local/eolia-icons/rows/nanoex.png" });
+  assert.deepEqual(rowFor(card, KEYS.nanoex), { entity: KEYS.nanoex, image: "/eolia_static/icons/rows/nanoex.png" });
 });
 
 test("icons: false probes nothing; a custom icons path is used", async () => {

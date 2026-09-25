@@ -30,16 +30,15 @@
  * shown rather than none, and there are no tooltips.
  *
  * Optional config:
- *   icons: /local/eolia-icons   # where Panasonic's app icons were copied (default shown);
- *                               # `icons: false` skips them. Those icons are Panasonic's
- *                               # artwork and are NOT shipped with the integration -- copy them
- *                               # yourself with tools/extract_icons.py. A mode whose icon file
- *                               # is missing (or has none) falls back to a tinted mdi icon, and a
- *                               # settings row whose <icons>/rows/<key>.png is missing (checked
- *                               # by loading it) simply keeps Home Assistant's own icon.
+ *   icons: /eolia_static/icons   # where the app icons are loaded from (default shown: the ones the
+ *                                # integration ships in www/icons/). Point it elsewhere, or use
+ *                                # `icons: false` to skip them. A mode whose icon file is missing
+ *                                # (or has none) falls back to a tinted mdi icon, and a settings
+ *                                # row whose <icons>/rows/<key>.png is missing (checked by loading
+ *                                # it) simply keeps Home Assistant's own icon.
  */
 
-const CARD_VERSION = "0.8.1";
+const CARD_VERSION = "0.9.0";
 
 // Entity rows in the stock settings card, in display order. Each is a translation_key, which is
 // also its id in the `controls` list. (The Dry humidity target and the double-temperature
@@ -85,7 +84,7 @@ const MODE_STYLE = {
 };
 const DEFAULT_MODE_STYLE = { mdi: "mdi:air-conditioner", color: "var(--primary-color)" };
 const OFF_STYLE = { mdi: "mdi:power", color: "var(--secondary-text-color)" };
-const DEFAULT_ICON_BASE = "/local/eolia-icons";
+const DEFAULT_ICON_BASE = "/eolia_static/icons"; // served by the integration (frontend.py)
 const DEBOUNCE_MS = 700;
 
 const CSS = `

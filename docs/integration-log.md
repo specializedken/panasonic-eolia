@@ -10,7 +10,9 @@ later one wins. Raw evidence for most claims is in
 For the Lovelace card see [`lovelace-card.md`](lovelace-card.md); for the API contract itself see
 [`findings.md`](findings.md).
 
-_Moved verbatim from `CLAUDE.md` on 2026-09-25._
+_Moved verbatim from `CLAUDE.md` on 2026-09-25._ (One policy in these entries has since changed:
+"Panasonic's icons are never committed" — on 2026-09-25 the 12 icons the card uses began to be committed
+under `custom_components/eolia/www/icons/`; see [`lovelace-card.md`](lovelace-card.md).)
 
 ## Phase 2 — Home Assistant integration (in progress)
 

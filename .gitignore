@@ -16,8 +16,10 @@ __pycache__/
 .venv/
 venv/
 
-# Icons extracted from the proprietary APK (tools/extract_icons.py) -- local-only, same policy as code/.
-icons/
+# The extractor's full local output (tools/extract_icons.py, ~100 Panasonic files). Only the
+# handful the card uses are committed, under custom_components/eolia/www/icons/ (Kevin's call,
+# 2026-09-25) -- the rest stays local-only, same policy as code/.
+/icons/
 
 # Fuzzer run logs (tools/eolia_fuzz.py)
 fuzz_runs/

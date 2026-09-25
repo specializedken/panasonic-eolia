@@ -4,7 +4,9 @@ Usage: python tools/extract_icons.py [--out icons]
 
 Picks the highest-density version of each wanted resource from code/res/{mipmap,drawable}-*
 and writes it to <out>/<category>/<name>.<ext>, plus <out>/manifest.json. The output is
-Panasonic's copyrighted artwork: it is gitignored and meant for local use only.
+Panasonic's copyrighted artwork: the default <out> (`icons/` at the repo root) is gitignored. Only
+the few files the Lovelace card uses are committed, by copying them by hand into
+custom_components/eolia/www/icons/ -- do not commit the rest.
 
 It also writes <out>/rows/<translation_key>.png: the few icons the Lovelace card shows on its
 settings rows (fan/louver/nanoeX/targeting), made square and recoloured. HA draws a row image
@@ -12,7 +14,8 @@ with `background-size: cover` in a 40 px circle, so a wide icon would be cropped
 originals are black or near-black (invisible on a dark theme). Needs Pillow; without it that
 step is skipped and the card simply keeps HA's own icons on those rows.
 
-To use them with the card, copy <out>/modes and <out>/rows into HA's www/eolia-icons/.
+To refresh what the card ships, copy the files it uses from <out>/modes and <out>/rows into
+custom_components/eolia/www/icons/modes and .../rows (tests/test_frontend.py checks they exist).
 """
 
 from __future__ import annotations
