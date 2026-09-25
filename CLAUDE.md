@@ -634,7 +634,7 @@ this repo as a design doc if that plan file isn't available in a future session)
   - **Tested**: `tests/test_controls.py`, `tests/test_frontend.py`, sensor tests (Python), and
     `tests/js/eolia-card.test.mjs` (`node --test tests/js/`) which runs the real card file
     against a fake DOM/`hass` (entity discovery across devices, rendering from `controls`,
-    reconfigure-not-recreate, missing-attribute fallback). 279 Python tests + 55 JS tests.
+    reconfigure-not-recreate, missing-attribute fallback). 283 Python tests + 64 JS tests.
     Kevin has looked at it rendered (feedback drove the 0.4.0 layout below); there is no
     headless browser on europa, so layout/CSS is only ever checked by eye -- the JS tests cover
     logic, not appearance. Hard-refresh after a deploy (companion app needs a cache clear).
@@ -756,6 +756,32 @@ this repo as a design doc if that plan file isn't available in a future session)
     listed in `_unrecorded_attributes` so the recorder doesn't store static text on every change.
     The card holds no copy of its own. Different from `OPERATION_MODE_DESCRIPTIONS`, which is the
     developer-facing note set. Add a tooltip when adding a mode (`test_sensor` enforces coverage).
+  - **Row icons (card 0.8.0, 2026-09-25):** four settings rows show the app's own icons --
+    vertical louver (`icon_updown_swing`), horizontal louver (`ic_wind_hor_swing`), nanoeX
+    (`v6_operation_nanoe`) and airflow targeting (`wind_hit`). Stock entity rows accept an `image`
+    (mdi only otherwise), but HA draws it with `background-size: cover` in a 40 px **circle**, and
+    the originals are wide and/or black (invisible on a dark theme), so `tools/extract_icons.py`
+    now also writes `<out>/rows/<translation_key>.png`: cropped to the glyph, **square-padded with
+    the glyph kept inside the circle**, recoloured to the app's slate `(105,124,146)` (readable on
+    light and dark; semi-transparent originals are stretched solid). Needs Pillow (in the venv);
+    without it the step is skipped. Install like the mode icons: copy `<out>/rows/` next to
+    `modes/` in HA's `www/eolia-icons/` (done on europa with `docker cp`). The card probes each
+    file by loading it and only sets `image` after it loads, so a missing file leaves HA's own
+    icon rather than a broken picture; keyed by translation_key via `ROW_IMAGE_KEYS`. Deliberately
+    not done: switching the targeting icon between `wind_shield` and `wind_hit` by state.
+  - **Air quality is not available on CS-712DX2-W, and its switch is gone (2026-09-25).** Checked
+    live against `GET /products/CS-712DX2-W/functions`: `airquality: false` and
+    `ai_airquality: false` (also `circulation`/`ventilation` false). The switch was already only
+    created when the flag is true, but an entry registered before that gating stayed in the entity
+    registry -- and the card, which finds entities from `hass.entities`, showed it as a dead row.
+    Fixes: `__init__.async_remove_unsupported_entities` deletes registry entries for features the
+    model reports false (`_MODEL_GATED_UNIQUE_ID_SUFFIXES`: `_airquality` -> `airquality`; only
+    acts on a flag the cloud actually returned false -- `supports()` is True for unknown, so a
+    failed fetch deletes nothing), and the card now skips entities whose state is HA's `restored`
+    orphan marker (`_isOrphan`), so no leftover ever renders as a row. **The two air-quality
+    *sensors* (`air_quality`, disabled-by-default raw value) still exist and read "off"/-1 on this
+    model** -- not touched (Kevin only asked about the switch); gate them the same way if wanted.
+    The fan speed select has the stock `mdi:fan` icon (`icon` on its description).
   - **The old YAML prototype (`dashboard/eolia.yaml`) was deleted** -- it hardcoded entity ids
     and encoded rules that had since gone stale.
   - **Not done / ideas**: the card doesn't use the per-model `supports()` flags directly (a

@@ -49,6 +49,35 @@ type EoliaConfigEntry = ConfigEntry[EoliaRuntimeData]
 _RETIRED_UNIQUE_ID_SUFFIXES = ("_double_temp_enabled",)
 
 
+# Entities that only exist on models with a given capability flag (GET /products/{code}/functions),
+# as unique_id suffix -> flag. The platforms already don't create them for a model without the
+# flag, but a registry entry left from before that gating (or from a model swap) would sit on
+# the device as a dead "unavailable" entity -- and the Lovelace card would show a row for it.
+_MODEL_GATED_UNIQUE_ID_SUFFIXES = {"_airquality": "airquality"}
+
+
+@callback
+def async_remove_unsupported_entities(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: EoliaDataUpdateCoordinator
+) -> list[str]:
+    """Delete registry entries for features the device's model reports it doesn't have.
+
+    Only acts on a flag the cloud actually reported as false: `supports()` answers True when
+    the flags are unknown, so a failed capability fetch never deletes anything.
+    """
+    registry = er.async_get(hass)
+    removed = []
+    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+        for suffix, function_id in _MODEL_GATED_UNIQUE_ID_SUFFIXES.items():
+            if not entity.unique_id.endswith(suffix):
+                continue
+            appliance_id = entity.unique_id[: -len(suffix)]
+            if not coordinator.supports(appliance_id, function_id):
+                registry.async_remove(entity.entity_id)
+                removed.append(entity.entity_id)
+    return removed
+
+
 @callback
 def async_remove_retired_entities(hass: HomeAssistant, entry: ConfigEntry) -> list[str]:
     """Delete registry entries for entities the integration no longer provides."""
@@ -98,8 +127,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: EoliaConfigEntry) -> boo
 
     entry.runtime_data = EoliaRuntimeData(api=api, coordinator=coordinator)
 
-    for entity_id in async_remove_retired_entities(hass, entry):
-        _LOGGER.info("Removed retired Eolia entity %s", entity_id)
+    for entity_id in (
+        *async_remove_retired_entities(hass, entry),
+        *async_remove_unsupported_entities(hass, entry, coordinator),
+    ):
+        _LOGGER.info("Removed Eolia entity %s (retired, or not supported by this model)", entity_id)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

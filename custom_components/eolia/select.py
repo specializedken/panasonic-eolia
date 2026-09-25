@@ -71,6 +71,7 @@ SELECT_DESCRIPTIONS: tuple[EoliaSelectEntityDescription, ...] = (
     EoliaSelectEntityDescription(
         key="fan_speed",
         translation_key="fan_speed",
+        icon="mdi:fan",
         options=[str(level) for level in WIND_VOLUME_LEVELS],
         control_field="wind_volume",
         current_option_fn=lambda status: str(status.wind_volume),

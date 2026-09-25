@@ -34,10 +34,12 @@
  *                               # `icons: false` skips them. Those icons are Panasonic's
  *                               # artwork and are NOT shipped with the integration -- copy them
  *                               # yourself with tools/extract_icons.py. A mode whose icon file
- *                               # is missing (or has none) falls back to a tinted mdi icon.
+ *                               # is missing (or has none) falls back to a tinted mdi icon, and a
+ *                               # settings row whose <icons>/rows/<key>.png is missing (checked
+ *                               # by loading it) simply keeps Home Assistant's own icon.
  */
 
-const CARD_VERSION = "0.7.0";
+const CARD_VERSION = "0.8.1";
 
 // Entity rows in the stock settings card, in display order. Each is a translation_key, which is
 // also its id in the `controls` list. (The Dry humidity target and the double-temperature
@@ -53,6 +55,10 @@ const SETTINGS_ROWS = [
   "silence_control",
   "air_quality_monitor",
 ];
+
+// Settings rows that show an app icon (<icons>/rows/<translation_key>.png, made square and
+// recoloured by tools/extract_icons.py -- HA draws a row image cropped into a circle).
+const ROW_IMAGE_KEYS = ["vertical_louver", "horizontal_louver", "nanoex", "wind_shield_hit"];
 
 const ROOM_KEYS = ["indoor_temperature", "indoor_humidity", "outdoor_temperature"];
 
@@ -162,6 +168,7 @@ class EoliaCard extends HTMLElement {
     this._views = {};
     this._edits = {};
     this._pending = null;
+    this._rowImages = null;
   }
 
   /** Map translation_key -> entity_id for every Eolia entity on the same device. */
@@ -175,12 +182,23 @@ class EoliaCard extends HTMLElement {
         e.device_id &&
         e.device_id === climate.device_id &&
         e.platform === climate.platform &&
-        e.translation_key
+        e.translation_key &&
+        !this._isOrphan(e.entity_id)
       ) {
         resolved[e.translation_key] = e.entity_id;
       }
     }
     return resolved;
+  }
+
+  /**
+   * True for an entity nothing provides any more: its registry entry survives, and HA shows it
+   * as an "unavailable" state flagged `restored`. Such a thing must not become a dead row (this
+   * is what a switch left over from an older version, or for a feature this model lacks, is).
+   */
+  _isOrphan(entityId) {
+    const st = this._hass.states[entityId];
+    return !!(st && st.attributes && st.attributes.restored);
   }
 
   _operationModeAttrs(ent) {
@@ -217,13 +235,39 @@ class EoliaCard extends HTMLElement {
     view.card.replaceChildren(...build());
   }
 
+  /** Where the Panasonic icons live, or null when the card was told not to use them. */
+  _iconBase() {
+    return this._config.icons === false ? null : this._config.icons || DEFAULT_ICON_BASE;
+  }
+
+  /**
+   * Find out which row icons exist (once per config) by loading them; a row only gets an
+   * `image` after its file has actually loaded, so nothing is ever a broken picture.
+   */
+  _probeRowImages() {
+    if (this._rowImages) return;
+    this._rowImages = {};
+    const base = this._iconBase();
+    if (!base) return;
+    for (const key of ROW_IMAGE_KEYS) {
+      const url = `${base}/rows/${key}.png`;
+      const img = new Image();
+      img.onload = () => {
+        this._rowImages[key] = url;
+        this._render();
+      };
+      img.onerror = () => {}; // not installed: the entity keeps its own icon
+      img.src = url;
+    }
+  }
+
   _icon(style, folder) {
     const mdi = () => {
       const icon = document.createElement("ha-icon");
       icon.setAttribute("icon", style.mdi);
       return icon;
     };
-    const base = this._config.icons === false ? null : this._config.icons || DEFAULT_ICON_BASE;
+    const base = this._iconBase();
     if (!style.icon || !base) return mdi();
     const img = document.createElement("img");
     img.alt = "";
@@ -689,7 +733,9 @@ class EoliaCard extends HTMLElement {
       {
         id: "settings",
         config: ({ ent, allows }) => {
-          const rows = SETTINGS_ROWS.filter((k) => ent[k] && allows(k)).map((k) => ent[k]);
+          const rows = SETTINGS_ROWS.filter((k) => ent[k] && allows(k)).map((k) =>
+            this._rowImages && this._rowImages[k] ? { entity: ent[k], image: this._rowImages[k] } : ent[k]
+          );
           if (ent.operation_mode) rows.unshift(ent.operation_mode);
           return rows.length ? { type: "entities", entities: rows } : null;
         },
@@ -750,6 +796,7 @@ class EoliaCard extends HTMLElement {
       this._container.replaceChildren(style, ...slots.map((s) => s.wrapper));
     }
     if (!this._slots) return;
+    this._probeRowImages();
 
     const controls = this._controls(ent);
     // Without the attribute, show everything rather than nothing.

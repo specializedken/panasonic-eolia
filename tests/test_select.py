@@ -150,3 +150,7 @@ async def test_fan_and_louver_selects_send_the_wire_type(coordinator, key, optio
     sent = next(a for a in coordinator.api.async_set_status.await_args.args if isinstance(a, dict))
     assert sent[field] == expected
     assert type(sent[field]) is type(expected)
+
+
+def test_fan_speed_uses_the_stock_fan_icon():
+    assert _description("fan_speed").icon == "mdi:fan"

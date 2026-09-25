@@ -28,6 +28,11 @@ function loadCard() {
   const cards = new Map();
   const created = [];
   const timers = new Map();
+  const images = []; // every Image() the card created to probe an icon file
+  class FakeImage {
+    set src(value) { this._src = value; images.push(this); }
+    get src() { return this._src; }
+  }
   let nextTimer = 0;
   const helpers = {
     createCardElement(cfg) {
@@ -44,6 +49,7 @@ function loadCard() {
     customElements: { get: (n) => cards.get(n), define: (n, c) => cards.set(n, c) },
     window: { loadCardHelpers: async () => helpers },
     console: { info() {} },
+    Image: FakeImage,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
     setTimeout: (f) => { timers.set(++nextTimer, f); return nextTimer; },
     clearTimeout: (id) => { timers.delete(id); },
@@ -55,7 +61,7 @@ function loadCard() {
     timers.clear();
     for (const f of fns) await f();
   };
-  return { Card: cards.get("eolia-card"), created, timers, fireTimers };
+  return { Card: cards.get("eolia-card"), created, timers, fireTimers, images };
 }
 
 const KEYS = {
@@ -616,6 +622,100 @@ test("a change in controls reconfigures the settings card instead of recreating 
   assert.equal(created.length, before);
   assert.equal(slot(card, "settings").element.reconfigured, 1);
   assert.deepEqual(settings(card), [KEYS.operation_mode, KEYS.ai_mode]);
+});
+
+// --- Row icons (Panasonic artwork, optional) ----------------------------------------------------------
+const settingsRows = (card) => plain(slot(card, "settings").element.config.entities);
+const rowFor = (card, entity) => settingsRows(card).find((r) => (typeof r === "string" ? r : r.entity) === entity);
+
+test("row icons are probed by loading them, one per icon-bearing row", async () => {
+  const { images } = await render(ALL_RUNNING);
+  assert.deepEqual(plain(images.map((i) => i.src).sort()), [
+    "/local/eolia-icons/rows/horizontal_louver.png",
+    "/local/eolia-icons/rows/nanoex.png",
+    "/local/eolia-icons/rows/vertical_louver.png",
+    "/local/eolia-icons/rows/wind_shield_hit.png",
+  ]);
+});
+
+test("a row gets its app icon only once the file has actually loaded", async () => {
+  const { card, images } = await render(ALL_RUNNING);
+  assert.equal(rowFor(card, KEYS.nanoex), KEYS.nanoex); // plain entity id until it loads
+  images.find((i) => i.src.endsWith("/nanoex.png")).onload();
+  await card._render();
+  assert.deepEqual(rowFor(card, KEYS.nanoex), { entity: KEYS.nanoex, image: "/local/eolia-icons/rows/nanoex.png" });
+  assert.equal(rowFor(card, KEYS.vertical_louver), KEYS.vertical_louver); // its own file hasn't loaded
+});
+
+test("all four icon rows can show their icon; row order is unchanged", async () => {
+  const { card, images } = await render(ALL_RUNNING);
+  const before = settingsRows(card).map((r) => (typeof r === "string" ? r : r.entity));
+  images.forEach((i) => i.onload());
+  await card._render();
+  const after = settingsRows(card);
+  assert.deepEqual(after.map((r) => (typeof r === "string" ? r : r.entity)), before);
+  const withImage = after.filter((r) => typeof r !== "string").map((r) => r.entity).sort();
+  assert.deepEqual(withImage, [KEYS.horizontal_louver, KEYS.nanoex, KEYS.vertical_louver, KEYS.wind_shield_hit].sort());
+});
+
+test("a missing icon file leaves the row with Home Assistant's own icon", async () => {
+  const { card, images } = await render(ALL_RUNNING);
+  images.forEach((i) => i.onerror());
+  await card._render();
+  assert.ok(settingsRows(card).every((r) => typeof r === "string"));
+});
+
+test("rows without an app icon never get an image, even if everything loaded", async () => {
+  const { card, images } = await render(ALL_RUNNING);
+  images.forEach((i) => i.onload());
+  await card._render();
+  assert.equal(rowFor(card, KEYS.ai_mode), KEYS.ai_mode);
+  assert.equal(rowFor(card, KEYS.air_flow), KEYS.air_flow);
+});
+
+test("a row the current mode hides stays hidden even with its icon loaded", async () => {
+  const { card, images } = await render(["ai_mode", "nanoex"]); // no louver rows
+  images.forEach((i) => i.onload());
+  await card._render();
+  assert.equal(rowFor(card, KEYS.vertical_louver), undefined);
+  assert.deepEqual(rowFor(card, KEYS.nanoex), { entity: KEYS.nanoex, image: "/local/eolia-icons/rows/nanoex.png" });
+});
+
+test("icons: false probes nothing; a custom icons path is used", async () => {
+  const off = await render(ALL_RUNNING, undefined, { icons: false });
+  assert.equal(off.images.length, 0);
+  const custom = await render(ALL_RUNNING, undefined, { icons: "/local/x" });
+  assert.ok(custom.images.every((i) => i.src.startsWith("/local/x/rows/")));
+});
+
+test("the probe runs once, not on every state update", async () => {
+  const { card, images } = await render(ALL_RUNNING);
+  const n = images.length;
+  card.hass = makeHass(ALL_RUNNING);
+  await card._render();
+  assert.equal(images.length, n);
+});
+
+test("a leftover 'restored' entity never becomes a dead row", async () => {
+  // e.g. the air-quality switch registered by an older version, on a model that lacks the feature
+  const env = loadCard();
+  const card = new env.Card();
+  card.setConfig({ entity: "climate.aircon" });
+  const hass = makeHass(undefined);
+  hass.entities["switch.aircon_airq"] = {
+    entity_id: "switch.aircon_airq", device_id: "dev1", platform: "eolia", translation_key: "air_quality_monitor",
+  };
+  hass.states["switch.aircon_airq"] = { state: "unavailable", attributes: { restored: true } };
+  card.hass = hass;
+  await card._building;
+  await card._render();
+  assert.ok(!settings(card).includes("switch.aircon_airq"));
+  // ...whereas the same entity provided normally (no `restored` flag) is shown
+  hass.states["switch.aircon_airq"] = { state: "off", attributes: {} };
+  card.hass = { ...hass };
+  await card._building; // a newly resolved entity rebuilds the cards
+  await card._render();
+  assert.ok(settings(card).includes("switch.aircon_airq"));
 });
 
 test("room glance lists only sensors that exist", async () => {
