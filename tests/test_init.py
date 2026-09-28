@@ -133,3 +133,64 @@ async def test_air_quality_sensors_are_kept_on_a_model_that_has_the_feature(hass
 
     assert async_remove_unsupported_entities(hass, entry, _coordinator({"airquality": True})) == []
     assert all(registry.async_get(s.entity_id) is not None for s in sensors)
+
+
+async def test_the_entry_loads_while_the_unit_is_unreachable_and_recovers_on_a_poll(hass):
+    """E-21291-01602 at startup must not leave the entry in HA's setup-retry loop."""
+    from datetime import timedelta
+    from unittest.mock import AsyncMock, patch
+
+    from homeassistant.config_entries import ConfigEntryState
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    from custom_components.eolia.const import (
+        CONF_ACCESS_TOKEN,
+        CONF_EXPIRES_AT,
+        CONF_REFRESH_TOKEN,
+        DEFAULT_SCAN_INTERVAL_SECONDS,
+    )
+    from custom_components.eolia.exceptions import EoliaDeviceUnreachableError
+    from custom_components.eolia.models import EoliaDevice, EoliaStatus
+
+    device = EoliaDevice(
+        appliance_id=APPLIANCE_ID, nickname="Yurt", product_code="CS-712DX2-W", product_name="t"
+    )
+    api = AsyncMock()
+    api.async_get_devices.return_value = [device]
+    api.async_get_functions.return_value = {"airquality": False}
+    api.async_get_status.side_effect = EoliaDeviceUnreachableError(500, "E-21291-01602", "x")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_ACCESS_TOKEN: "a", CONF_REFRESH_TOKEN: "r", CONF_EXPIRES_AT: 4_000_000_000},
+    )
+    entry.add_to_hass(hass)
+    # The real frontend isn't installable in the test harness, and the card isn't under test.
+    hass.config.components.update({"frontend", "http", "lovelace"})
+
+    with (
+        patch("custom_components.eolia.EoliaApiClient", return_value=api),
+        patch("custom_components.eolia.async_register_card", AsyncMock()),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.LOADED
+        registry = er.async_get(hass)
+        climate_id = registry.async_get_entity_id("climate", DOMAIN, f"{APPLIANCE_ID}_climate")
+        assert climate_id is not None
+        assert hass.states.get(climate_id).state == "unavailable"
+        # The capability flags were read despite the unreachable unit, so a feature the
+        # model lacks isn't created just because they were unknown.
+        assert registry.async_get_entity_id("switch", DOMAIN, f"{APPLIANCE_ID}_airquality") is None
+
+        api.async_get_status.side_effect = None
+        api.async_get_status.return_value = EoliaStatus.from_dict(
+            {"appliance_id": APPLIANCE_ID, "operation_status": False}
+        )
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS + 1)
+        )
+        await hass.async_block_till_done()
+
+        assert hass.states.get(climate_id).state == "off"

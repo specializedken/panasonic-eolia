@@ -18,6 +18,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import EoliaApiClient
@@ -102,6 +103,29 @@ def _ignore_reason(field: str, new: EoliaStatus) -> str:
     return "the unit did not apply it"
 
 
+_STORAGE_VERSION = 1
+
+
+def _profile_key(mode: str) -> str | None:
+    """The mode a per-mode profile is filed under, or None for one that has no profile.
+
+    Only modes that can be requested through /status and that carry the user's own settings
+    qualify: Stop/Other are not a running mode, KeepMode is entered through /customsettings
+    (a /status write carrying it is always rejected), and the clean family runs by itself.
+    Nanoe is not requestable -- it is what Blast + nanoeX reads back as -- so it files as Blast.
+    """
+    if mode == EoliaOperationMode.NANOE:
+        return str(EoliaOperationMode.BLAST)
+    if mode in (
+        EoliaOperationMode.STOP,
+        EoliaOperationMode.OTHER,
+        EoliaOperationMode.KEEP_MODE,
+        *CLEAN_FAMILY_MODES,
+    ):
+        return None
+    return str(mode)
+
+
 _UNREACHABLE_MESSAGE = (
     "Panasonic's cloud can't reach the AC (E-21291-01602). It is probably switched off at "
     "the wall or has lost its Wi-Fi connection; this clears by itself once the unit is "
@@ -174,6 +198,115 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
         # device" (E-21291-01718). Live 2026-09-23: dragging a number slider fired two
         # writes 0.6s apart. Serialising them lets each one pick up the fresh token.
         self._write_lock = asyncio.Lock()
+        # What each mode was last set up as, per appliance: {appliance_id: {mode: {field:
+        # value}}}. Switching to a mode (or powering on into it) replays its profile -- target
+        # temperature / Dry humidity, AI, nanoeX, fan, louvers, airflow, quiet -- instead of
+        # carrying over whatever the previous mode had. Persisted (Store) so it survives an HA
+        # restart or the unit dropping offline; see _remember_profile / _apply_profile.
+        self._profiles: dict[str, dict[str, dict[str, Any]]] = {}
+        self._store: Store[dict[str, Any]] = Store(hass, _STORAGE_VERSION, f"{DOMAIN}_profiles")
+        self._saved_snapshot: dict[str, Any] | None = None
+
+    async def async_load_profiles(self) -> None:
+        """Restore the per-mode profiles and last running mode saved by an earlier run."""
+        data = await self._store.async_load()
+        if not isinstance(data, dict):
+            return
+        for appliance_id, saved in (data.get("appliances") or {}).items():
+            self._profiles[appliance_id] = saved.get("profiles") or {}
+            if saved.get("last_mode"):
+                self._last_mode_cache.setdefault(appliance_id, saved["last_mode"])
+        self._saved_snapshot = self._snapshot()
+
+    def _snapshot(self) -> dict[str, Any]:
+        return {
+            "appliances": {
+                appliance_id: {
+                    "profiles": self._profiles.get(appliance_id, {}),
+                    "last_mode": self._last_mode_cache.get(appliance_id),
+                }
+                for appliance_id in {*self._profiles, *self._last_mode_cache}
+            }
+        }
+
+    async def _async_persist(self) -> None:
+        """Save the profiles if they changed (rare: only when a setting actually differs)."""
+        snapshot = self._snapshot()
+        if snapshot == self._saved_snapshot:
+            return
+        try:
+            await self._store.async_save(snapshot)
+        except OSError as err:
+            _LOGGER.warning("Couldn't save the Eolia per-mode settings: %s", err)
+            return
+        self._saved_snapshot = snapshot
+
+    def _remember(self, appliance_id: str, status: EoliaStatus) -> None:
+        """Fold a status (from a poll or a write response) into every local cache."""
+        self._remember_temperature(appliance_id, status)
+        self._remember_mode(appliance_id, status)
+        self._remember_humidity(appliance_id, status)
+        self._remember_profile(appliance_id, status)
+
+    def _remember_profile(self, appliance_id: str, status: EoliaStatus) -> None:
+        key = _profile_key(status.operation_mode) if status.operation_status else None
+        if key is None:
+            return
+        profiles = self._profiles.setdefault(appliance_id, {})
+        old = profiles.get(key, {})
+        fields: dict[str, Any] = {
+            "ai_control": status.ai_control,
+            "nanoex": status.nanoex,
+            "air_flow": status.air_flow,
+            "wind_volume": status.wind_volume,
+            "wind_direction": status.wind_direction,
+            "wind_direction_horizon": status.wind_direction_horizon,
+            "wind_shield_hit": status.wind_shield_hit,
+        }
+        # Dry and ClothesDryer report a forced temperature of 0.0: nothing to remember there.
+        if key not in NO_TARGET_TEMPERATURE_MODES and status.temperature:
+            fields["temperature"] = status.temperature
+        if key == EoliaOperationMode.COMFORTABLE_DEHUMIDIFICATION and status.humidity is not None:
+            fields["humidity"] = status.humidity
+        # silence_control has no readback, so only what we set or restored is known. After an
+        # HA restart the cache is empty: adopt the saved value for the running mode instead of
+        # overwriting it with the default.
+        if appliance_id not in self._silence_control_cache and "silence_control" in old:
+            self._silence_control_cache[appliance_id] = old["silence_control"]
+        if appliance_id in self._silence_control_cache:
+            fields["silence_control"] = self._silence_control_cache[appliance_id]
+        profiles[key] = {**old, **fields}
+
+    def _apply_profile(
+        self,
+        appliance_id: str,
+        current: EoliaStatus,
+        payload: dict[str, Any],
+        changes: dict[str, Any],
+    ) -> None:
+        """Fill `payload` from the target mode's saved profile when this write *enters* it.
+
+        Entering = powering on, or moving from a different mode. A write inside the running
+        mode (a slider, a switch) is left alone, and so is anything the caller asked for
+        explicitly. The server silently drops what a mode doesn't support, so a stale field
+        can't make the write fail -- and only fields the caller asked for are checked for
+        being ignored, not these.
+        """
+        key = _profile_key(payload["operation_mode"])
+        if key is None or not payload["operation_status"]:
+            return
+        if current.operation_status and _profile_key(current.operation_mode) == key:
+            return
+        for field, value in self._profiles.get(appliance_id, {}).get(key, {}).items():
+            if field in changes:
+                continue
+            if field == "silence_control":
+                self._silence_control_cache[appliance_id] = value
+                payload[field] = value
+            elif field == "humidity":
+                self._humidity_cache[appliance_id] = value
+            else:
+                payload[field] = value
 
     def _remember_mode(self, appliance_id: str, status: EoliaStatus) -> None:
         mode = status.operation_mode
@@ -236,12 +369,13 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
     async def _async_update_data(self) -> dict[str, EoliaStatus]:
         statuses: dict[str, EoliaStatus] = {}
         for appliance_id in self.devices:
-            statuses[appliance_id] = await self._async_get_status(appliance_id)
-            self._remember_temperature(appliance_id, statuses[appliance_id])
-            self._remember_mode(appliance_id, statuses[appliance_id])
-            self._remember_humidity(appliance_id, statuses[appliance_id])
+            # Capabilities first: they don't depend on the unit being reachable, and entity
+            # setup gates on them even when the first status read fails.
             await self._async_fetch_functions(appliance_id)
+            statuses[appliance_id] = await self._async_get_status(appliance_id)
+            self._remember(appliance_id, statuses[appliance_id])
             await self._async_refresh_custom_settings(appliance_id)
+        await self._async_persist()
         return statuses
 
     async def _async_refresh_custom_settings(self, appliance_id: str) -> None:
@@ -343,6 +477,8 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 self._humidity_cache[appliance_id] = value
             payload[key] = value
 
+        self._apply_profile(appliance_id, current, payload, changes)
+
         # ComfortableDehumidification ("Dry") and ClothesDryer both have no user-settable
         # temperature at all -- the server rejects any nonzero value with E-21291-01712
         # (see const.py's ERROR_CODE_TEMPERATURE_OUT_OF_RANGE). Forced here (not left to
@@ -389,9 +525,8 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
 
         if new_status.operation_token:
             self._operation_token_cache[appliance_id] = new_status.operation_token
-        self._remember_temperature(appliance_id, new_status)
-        self._remember_mode(appliance_id, new_status)
-        self._remember_humidity(appliance_id, new_status)
+        self._remember(appliance_id, new_status)
+        await self._async_persist()
 
         updated = dict(self.data or {})
         updated[appliance_id] = new_status
@@ -476,9 +611,8 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 break
         if status is None:
             return
-        self._remember_temperature(appliance_id, status)
-        self._remember_mode(appliance_id, status)
-        self._remember_humidity(appliance_id, status)
+        self._remember(appliance_id, status)
+        await self._async_persist()
         updated = dict(self.data or {})
         updated[appliance_id] = status
         self.async_set_updated_data(updated)

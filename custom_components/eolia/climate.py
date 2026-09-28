@@ -349,4 +349,6 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
         await self.coordinator.async_set_status(self._appliance_id, operation_status=True)
 
     async def async_turn_off(self) -> None:
-        await self.coordinator.async_set_status(self._appliance_id, operation_status=False)
+        # Same path as hvac_mode OFF: the card calls climate.turn_off, and in the clean family a
+        # bare operation_status=False is a no-op (it already reads False while running).
+        await self.async_set_hvac_mode(HVACMode.OFF)

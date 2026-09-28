@@ -467,3 +467,42 @@ this repo as a design doc if that plan file isn't available in a future session)
   at the wall or lost its Wi-Fi. New "Error codes" table in `docs/findings.md`. 294 tests.
   `E-21291-01717` on a `set_hvac_mode` write at 22:33 on 2026-09-27 (after the first `01602`) may be the same cause, but with a single
   sighting it is documented, not special-cased.
+- **Update, 2026-09-28 (later) -- the entry now loads while the AC is unreachable; per-mode
+  profiles.**
+  - **Setup no longer waits for the unit.** Same day as the entry above: the AC came back but
+    the entities stayed `unavailable` (the recorder DB showed *placeholder* `unavailable` states
+    from each HA restart, never a real one). Cause: `async_config_entry_first_refresh()` turns a
+    failed first status read (`01602`) into `ConfigEntryNotReady`, so the entry sat in HA's
+    setup-retry loop (backoff up to ~80 s) with no entities at all. `async_setup_entry` now uses
+    `coordinator.async_refresh()`: the entry loads, entities are unavailable, and the ordinary 60 s
+    poll revives them. There is no heartbeat to add -- the poll is the heartbeat. Because entity
+    setup gates on the model's capability flags (`supports()`), `/functions` is now fetched
+    *before* the status read (it doesn't need the unit), or an unreachable start would have
+    recreated the air-quality entities this model lacks.
+  - **Per-mode profiles** (`coordinator._profiles`, persisted with HA's `Store`, file
+    `.storage/eolia_profiles`). Every status the coordinator sees (poll or write response) while
+    the unit runs a real mode is filed under that mode: target temperature, Dry humidity, `ai_control`,
+    `nanoex`, `wind_volume`, both louvers, `air_flow`, `wind_shield_hit`, and `silence_control`
+    (write-only, so only what we set or restored). *Entering* a mode -- powering on, or coming
+    from a different one -- fills the write from that mode's profile; anything the caller passed
+    explicitly wins, and a write inside the running mode never replays it. Stop/Other,
+    `KeepMode` (entered via `/customsettings`) and the clean family have no profile; `Nanoe`
+    files under `Blast` (it is Blast + nanoeX). The server silently drops what a mode doesn't
+    support, so a saved field can't make a write fail. The last running mode is persisted too, so
+    `turn_on` after an HA restart picks the right mode. Not done: nothing is written to the unit
+    when it *reconnects* (only when the user picks a mode), and there is no UI for the profiles.
+    UNVERIFIED on the real unit at the time of writing this entry.
+  - Tests: `tests/test_profiles.py` (13), an entry-loads-while-unreachable test in `test_init.py`;
+    the shared coordinator fixtures now return real statuses (every status is folded into the
+    caches, so a bare `Mock` no longer works). 308 tests.
+  - **Off from a clean mode did nothing via the card (2026-09-28).** Kevin's unit went into
+    cleaning after being switched off with the remote/app; the card's Off did "something" but the
+    unit kept running. Cause: the card calls `climate.turn_off`, and `async_turn_off` sent a bare
+    `operation_status=False` -- already the value while a clean mode runs, so a no-op. Only
+    `async_set_hvac_mode(OFF)` carried the app's normalized stop body (see the clean-family entry
+    above). `async_turn_off` now goes through it. Test added; 309 tests. Python change, so needs
+    an HA restart to deploy. **Confirmed live 2026-09-28** after the restart: Off from the card
+    stopped the unit while it was cleaning. The unit enters cleaning by itself after some
+    power-offs (remote and app too); the integration doesn't cause or prevent that. Kevin
+    chose to keep Off manual rather than auto-cancelling the cycle (the cycle is probably
+    Panasonic's internal drying, so cutting it short every time isn't obviously wise).

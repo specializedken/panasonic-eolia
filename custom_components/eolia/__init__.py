@@ -127,7 +127,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: EoliaConfigEntry) -> boo
         _LOGGER.warning("Eolia account has no registered devices")
 
     coordinator = EoliaDataUpdateCoordinator(hass, api, devices)
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_load_profiles()
+    # Deliberately NOT async_config_entry_first_refresh(): that turns a failed first read into
+    # ConfigEntryNotReady, and while the AC is unreachable (E-21291-01602: off at the wall, or
+    # off Wi-Fi) the whole entry then sat in HA's setup-retry loop, every entity a dead
+    # "unavailable" placeholder, until a retry happened to land. Loading anyway makes the
+    # entities unavailable-but-alive: the normal 60 s poll revives them the moment the unit is
+    # back. A rejected login still starts reauth (async_refresh handles that itself).
+    await coordinator.async_refresh()
+    if not coordinator.last_update_success:
+        _LOGGER.info(
+            "Eolia loaded without a first status (%s); entities are unavailable until the "
+            "next poll succeeds",
+            coordinator.last_exception,
+        )
 
     entry.runtime_data = EoliaRuntimeData(api=api, coordinator=coordinator)
 

@@ -67,8 +67,11 @@ def new_status(control_response) -> EoliaStatus:
 
 
 @pytest.fixture
-def coordinator(hass, device) -> EoliaDataUpdateCoordinator:
+def coordinator(hass, device, status_response) -> EoliaDataUpdateCoordinator:
     api = AsyncMock()
+    # What a status re-read returns unless a test says otherwise: a real one, since every
+    # status the coordinator sees is folded into its caches.
+    api.async_get_status.return_value = EoliaStatus.from_dict(status_response)
     return EoliaDataUpdateCoordinator(hass, api, [device])
 
 

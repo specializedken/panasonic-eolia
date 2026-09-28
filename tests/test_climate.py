@@ -348,6 +348,25 @@ async def test_turning_off_from_the_clean_family_sends_the_apps_stop_body(coordi
     )
 
 
+async def test_turn_off_service_from_the_clean_family_sends_the_apps_stop_body(coordinator):
+    # The card's Off button calls climate.turn_off, not set_hvac_mode.
+    coordinator.async_set_updated_data({APPLIANCE_ID: _clean_status(EoliaOperationMode.CLEANING)})
+    coordinator.async_set_status = AsyncMock()
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_turn_off()
+
+    coordinator.async_set_status.assert_awaited_once_with(
+        APPLIANCE_ID,
+        operation_status=False,
+        operation_mode="Auto",
+        temperature=16.0,
+        wind_volume=0,
+        wind_direction=0,
+        wind_direction_horizon="auto",
+    )
+
+
 async def test_turning_off_a_normal_mode_only_sets_operation_status(coordinator):
     coordinator.async_set_updated_data({APPLIANCE_ID: _status(operation_status=True)})
     coordinator.async_set_status = AsyncMock()
@@ -441,6 +460,7 @@ async def test_turn_off_in_keep_mode_disables_the_double_temperature_setting(coo
     coordinator.api.async_set_custom_settings.return_value = EoliaCustomSettings.from_dict(
         {"double_mode_temp": {"status": False, "high": 0, "low": 0}, "peak_cut": 100}
     )
+    coordinator.api.async_get_status.return_value = _status(operation_status=False)
     entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
 
     await entity.async_turn_off()
