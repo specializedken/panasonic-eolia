@@ -225,6 +225,39 @@ test("a mode with no target keeps the dial on screen, greyed out", async () => {
   assert.equal(plus(card).disabled, true);
 });
 
+test("an unavailable unit reads 'Unavailable' in place of the temperature, like HA's own card", async () => {
+  const { card } = await render(undefined, { climateState: "unavailable" });
+  assert.equal(slider(card).disabled, true);
+  assert.equal(heading(card), "");
+  assert.equal(valueText(card), "Unavailable");
+  assert.equal(subText(card), "");
+  assert.equal(minus(card).disabled, true);
+  assert.equal(plus(card).disabled, true);
+  assert.ok(buttons(card).every((b) => b.disabled)); // the mode picker can't act either
+});
+
+test("'Unavailable' uses HA's localized string when there is one", async () => {
+  const env = loadCard();
+  const card = new env.Card();
+  card.setConfig({ entity: "climate.aircon" });
+  const hass = makeHass(undefined, { climateState: "unavailable" });
+  hass.localize = (key) => (key === "state.default.unavailable" ? "Indisponible" : "");
+  card.hass = hass;
+  await card._building;
+  await card._render();
+  assert.equal(valueText(card), "Indisponible");
+});
+
+test("the dial comes back to normal when the unit does", async () => {
+  const { card } = await render(undefined, { climateState: "unavailable" });
+  card.hass = makeHass(undefined, { climateState: "cool" });
+  await card._render();
+  assert.equal(heading(card), "Target temperature");
+  assert.equal(valueText(card), "24.0°C");
+  assert.equal(slider(card).disabled, false);
+  assert.ok(buttons(card).every((b) => !b.disabled));
+});
+
 test("off reads 'Off' on the greyed dial", async () => {
   const { card } = await render([], { climateState: "off" });
   assert.equal(heading(card), "Off");

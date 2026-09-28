@@ -34,7 +34,10 @@ the attributes (older integration) the card shows everything.
 1. **Setpoint dial** — HA's own `ha-control-circular-slider`. Target temperature normally; the Dry
    humidity target (50–60, 5% steps) in Dry; a two-thumb low/high in Double temperature (with a
    small Low/High stepper each and the ≥5° gap enforced instantly). In modes with no target (odor
-   care, off, clothes drying) it stays on screen **greyed out**, so the layout never shifts. Drags
+   care, off, clothes drying) it stays on screen **greyed out**, so the layout never shifts. When the
+   climate entity is `unavailable`/`unknown` (unit offline) the dial reads **Unavailable** (HA's
+   localized string) where the temperature would be, like HA's thermostat card, and the mode grid
+   is disabled. Drags
    show live; taps and releases are debounced (700 ms) into one write.
 2. **Mode grid** — Off first, then the modes in `const.PRESET_MODE_ORDER`, with the app's own accent
    colours, Panasonic icons where the app has one (mdi otherwise) and a tooltip per mode.
@@ -274,3 +277,10 @@ be copied to `www/eolia-icons/` are out of date** — see "Icons" in the current
     no visual editor (`getConfigElement`); no separate treatment of a unit that's "off" beyond
     hiding settings; the louver/airflow/shield-hit icons from the app are unused (dark grey or
     white line art that disappears on one theme -- would need per-theme recolouring).
+- **Update, 2026-09-28 — card 0.9.1: an unreachable unit reads "Unavailable".** The AC was off, so
+  the cloud answered `E-21291-01602` (see `integration-log.md`) and the climate entity went
+  `unavailable`; the card just showed a greyed dial with "No target in this mode" and a dash.
+  Now, as in HA's thermostat card, the dial's value reads "Unavailable" (`hass.localize`
+  `state.default.unavailable`, falling back to English; smaller font so the word fits), with no
+  heading or "Currently" line, the -/+ buttons disabled, and the mode grid disabled. `unknown`
+  is treated the same. Tests: 3 new (67 JS tests).

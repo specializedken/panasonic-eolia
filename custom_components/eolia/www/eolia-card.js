@@ -38,7 +38,7 @@
  *                                # it) simply keeps Home Assistant's own icon.
  */
 
-const CARD_VERSION = "0.9.0";
+const CARD_VERSION = "0.9.1";
 
 // Entity rows in the stock settings card, in display order. Each is a translation_key, which is
 // also its id in the `controls` list. (The Dry humidity target and the double-temperature
@@ -106,6 +106,7 @@ const CSS = `
   justify-content:center;gap:4px;pointer-events:none;color:var(--primary-text-color)}
 .eolia-head{font-size:14px;font-weight:500;text-align:center;max-width:60%}
 .eolia-val{font-size:44px;font-weight:300;line-height:1.1;white-space:nowrap}
+.eolia-val-text{font-size:24px}
 .eolia-val small{font-size:16px;margin-left:2px;color:var(--secondary-text-color)}
 .eolia-sub{font-size:13px;color:var(--secondary-text-color);min-height:1.2em}
 .eolia-buttons{position:absolute;bottom:10px;left:0;right:0;display:flex;justify-content:center;
@@ -198,6 +199,18 @@ class EoliaCard extends HTMLElement {
   _isOrphan(entityId) {
     const st = this._hass.states[entityId];
     return !!(st && st.attributes && st.attributes.restored);
+  }
+
+  /** True while the climate entity has no usable state (the unit is offline / not yet read). */
+  _isUnreachable(climate) {
+    return !!climate && (climate.state === "unavailable" || climate.state === "unknown");
+  }
+
+  /** "Unavailable" / "Unknown" in the user's language, as HA's own cards show it. */
+  _stateLabel(state) {
+    const localize = this._hass.localize;
+    const text = localize && localize(`state.default.${state}`);
+    return text || (state === "unavailable" ? "Unavailable" : "Unknown");
   }
 
   _operationModeAttrs(ent) {
@@ -351,6 +364,17 @@ class EoliaCard extends HTMLElement {
         },
       ],
     };
+
+    // Like HA's thermostat card: an unreachable unit shows its state ("Unavailable") where the
+    // temperature would be, on the greyed dial.
+    if (this._isUnreachable(climate)) {
+      return {
+        ...disabledSpec,
+        heading: "",
+        valueText: this._stateLabel(climate.state),
+        current: undefined,
+      };
+    }
 
     if (has("double_temp_low")) {
       const steppers = [numberStepper("double_temp_low", "Low"), numberStepper("double_temp_high", "High")];
@@ -619,8 +643,10 @@ class EoliaCard extends HTMLElement {
     refs.slider.step = sp.steppers[0].step;
     refs.slider.current = sp.current;
     refs.dial.style.setProperty("--eolia-accent", sp.accent);
+    // A word ("Unavailable") doesn't fit the big-number size.
+    refs.val.className = sp.valueText ? "eolia-val eolia-val-text" : "eolia-val";
     if (sp.disabled) {
-      refs.valText.textContent = "–";
+      refs.valText.textContent = sp.valueText || "–";
     } else if (!this._dragging) {
       // Never touch the dial mid-drag: a poll landing then would yank the thumb.
       if (sp.dual) {
@@ -650,13 +676,14 @@ class EoliaCard extends HTMLElement {
     const presets = (climate && climate.attributes.preset_modes) || [];
     const current = climate && climate.attributes.preset_mode;
     const isOff = climate && climate.state === "off";
+    const unreachable = this._isUnreachable(climate);
     if (!presets.length) {
       wrapper.hidden = true;
       return;
     }
     wrapper.hidden = false;
     const descriptions = this._operationModeAttrs(ent).mode_descriptions || {};
-    const key = JSON.stringify([presets, current, isOff, this._pending, this._config.icons, descriptions]);
+    const key = JSON.stringify([presets, current, isOff, unreachable, this._pending, this._config.icons, descriptions]);
     this._rebuild("modes", wrapper, key, () => {
       const grid = document.createElement("div");
       grid.className = "eolia-modes";
@@ -665,7 +692,7 @@ class EoliaCard extends HTMLElement {
         button.className = "eolia-mode";
         button.setAttribute("aria-pressed", String(active));
         button.style.setProperty("--accent", look.color);
-        button.disabled = this._pending != null;
+        button.disabled = this._pending != null || unreachable;
         if (tip) button.title = tip;
         const ico = document.createElement("span");
         ico.className = "ico";
