@@ -53,6 +53,16 @@ class EoliaDeviceLockedError(EoliaApiError):
     """
 
 
+class EoliaDeviceUnreachableError(EoliaApiError):
+    """Raised for E-21291-01602 -- the cloud could not fetch the AC's information.
+
+    The server's own message is Japanese-only ("failed to get the air conditioner's
+    information, please try again later"). Seen while the unit was off/offline: the cloud
+    has no live link to it, so the status read fails even though login and the device list
+    still work. Not something the integration can fix; it clears once the unit reconnects.
+    """
+
+
 class EoliaNetworkError(EoliaApiError):
     """Raised for a transport-level failure (timeout, connection error) with no HTTP response.
 

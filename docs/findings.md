@@ -251,6 +251,26 @@ Key fields: `operation_status` (bool, power), `operation_mode` (string, see tabl
 `temp_correction`, `timer_value`, `sleep_control_status`, `addhumidifying_value`, `ventilation`,
 `two_way_built_in_ceiling`.
 
+## Error codes
+
+Every API error is a JSON body `{"code": "E-21291-NNNNN", "message": "<Japanese>"}`. The
+messages are Japanese-only, so the integration maps the ones a user can act on to a clear
+English message (`const.py` holds the codes, `exceptions.py` the classes).
+
+| Code | Message (translated) | Meaning / when seen |
+|---|---|---|
+| `E-21291-00002` | server time and device time differ by 5+ minutes | `X-Eolia-Date` too far off; see the headers section. Fix the host clock. |
+| `E-21291-00007` | an application error occurred | Generic. Malformed body, e.g. `humidity` missing in Dry or `applianceId` in the body. |
+| `E-21291-00000` | system error | Generic, from untried `/poc/.../eco/*` endpoints. |
+| `E-21291-01602` | **failed to get the AC's information, try again later** | **`GET /status` while the AC is off or offline.** The cloud has no live link to the unit; login and `GET /devices` still work. Clears by itself when the unit reconnects. Live 2026-09-27 and 2026-09-28 (Kevin confirmed the AC was off). Raises `EoliaDeviceUnreachableError`; the coordinator reports the unit as unavailable with "Panasonic's cloud can't reach the AC ... probably switched off at the wall or has lost its Wi-Fi". |
+| `E-21291-01703` | (generic) | `operation_mode` omitted in a `KeepMode` write. |
+| `E-21291-01711` | an application error occurred | Rejected mode/state combination (plain `Dehumidifying`, `KeepHeating`, any `/status` write in `KeepMode`). |
+| `E-21291-01712` | temperature out of range | Off-grid (not 0.5 °C) or wrong-for-mode temperature. |
+| `E-21291-01717` | communication error, try again later | Seen on a write (`set_hvac_mode`) 2026-09-27 22:33, after `01602` had already appeared on a status read at 06:04 that day. Possibly the same offline unit, but only one instance so far, so it is **not** specially handled. |
+| `E-21291-01718` | controlled by another device, no changes for 2 minutes | `operation_token` not echoed; see the write-lock rules. |
+| `E-21291-02009` | | `double_mode_temp` high/low less than 5 apart. |
+| `E-21291-T0004` | | Client-side code the app generates locally; never comes from the server. |
+
 ## Other endpoints found (from `strings.xml`, keys prefixed `api_`)
 
 Not individually traced to call sites, but paths are plain strings so worth listing for later.

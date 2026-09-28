@@ -455,3 +455,15 @@ this repo as a design doc if that plan file isn't available in a future session)
     `turn_off` in `KeepMode`. Existing tests whose mocked PUT response didn't echo the request
     were fixed to echo it (an unchanged response now correctly reads as an ignored write).
   - **Not done**: `--raw`/`--wild` fuzz passes, `peak_cut`, `timer_value`, other models.
+- **Update, 2026-09-28 -- integration "dead" = the AC was off; `E-21291-01602` handled.** The
+  entities went unavailable and HA logged `E-21291-01602: エアコンの情報取得に失敗しました...`
+  ("failed to get the AC's information, try again later"; first seen 2026-09-27 06:04). Not a
+  bug: the tokens were valid (expiry 2026-10-07), DNS was fine (a burst of refused queries right
+  after the 07:39 HA restart hit every integration, unrelated), and `eolia_cli.py devices`
+  worked while `status` failed with the same code. Kevin confirmed the unit was off. So
+  `01602` = the cloud can't reach the unit. Implemented: `ERROR_CODE_DEVICE_UNREACHABLE`,
+  `EoliaDeviceUnreachableError` (raised by `api.py`), and the coordinator turns it into an
+  `UpdateFailed` (no retry) or write `HomeAssistantError` saying the AC is probably switched off
+  at the wall or lost its Wi-Fi. New "Error codes" table in `docs/findings.md`. 294 tests.
+  `E-21291-01717` on a `set_hvac_mode` write at 22:33 on 2026-09-27 (after the first `01602`) may be the same cause, but with a single
+  sighting it is documented, not special-cased.

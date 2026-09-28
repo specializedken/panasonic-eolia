@@ -21,11 +21,13 @@ from .const import (
     EOLIA_DATE_TIMEZONE,
     ERROR_CODE_CLOCK_SKEW,
     ERROR_CODE_DEVICE_LOCKED,
+    ERROR_CODE_DEVICE_UNREACHABLE,
 )
 from .exceptions import (
     EoliaApiError,
     EoliaClockSkewError,
     EoliaDeviceLockedError,
+    EoliaDeviceUnreachableError,
     EoliaNetworkError,
 )
 from .models import EoliaCustomSettings, EoliaDevice, EoliaStatus
@@ -156,7 +158,11 @@ class EoliaApiClient:
                 if resp.status >= 400:
                     code = body.get("code")
                     message = body.get("message", "")
-                    _KNOWN_CODES = (ERROR_CODE_CLOCK_SKEW, ERROR_CODE_DEVICE_LOCKED)
+                    _KNOWN_CODES = (
+                        ERROR_CODE_CLOCK_SKEW,
+                        ERROR_CODE_DEVICE_LOCKED,
+                        ERROR_CODE_DEVICE_UNREACHABLE,
+                    )
                     if code is None:
                         _LOGGER.warning(
                             "Eolia API error with no recognizable code: status=%s body=%s",
@@ -183,6 +189,8 @@ class EoliaApiClient:
                         raise EoliaClockSkewError(resp.status, code, message)
                     if code == ERROR_CODE_DEVICE_LOCKED:
                         raise EoliaDeviceLockedError(resp.status, code, message)
+                    if code == ERROR_CODE_DEVICE_UNREACHABLE:
+                        raise EoliaDeviceUnreachableError(resp.status, code, message)
                     raise EoliaApiError(resp.status, code, message)
 
                 _LOGGER.debug(

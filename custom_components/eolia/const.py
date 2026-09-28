@@ -321,6 +321,12 @@ ERROR_CODE_UNKNOWN_01711 = "E-21291-01711"
 # test, and 02/04/37 for how the "another device" theory was arrived at and then
 # superseded.
 ERROR_CODE_DEVICE_LOCKED = "E-21291-01718"
+# "Failed to fetch the AC's information, please try again later" -- returned by GET
+# /status when Panasonic's cloud can't reach the unit. Observed 2026-09-27/28 while the AC
+# was off/offline (no Wi-Fi link to the cloud); the app's own device list still works, only
+# the status read fails. Recovers by itself once the unit is back online. See
+# docs/findings.md's "Error codes" section.
+ERROR_CODE_DEVICE_UNREACHABLE = "E-21291-01602"
 # double_mode_temp.high/low must be at least 5 degrees apart.
 ERROR_CODE_DOUBLE_TEMP_RANGE_TOO_NARROW = "E-21291-02009"
 

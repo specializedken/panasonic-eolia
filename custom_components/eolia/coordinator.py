@@ -43,6 +43,7 @@ from .exceptions import (
     EoliaAuthError,
     EoliaClockSkewError,
     EoliaDeviceLockedError,
+    EoliaDeviceUnreachableError,
     EoliaNetworkError,
 )
 from .models import EoliaCustomSettings, EoliaDevice, EoliaStatus
@@ -99,6 +100,13 @@ def _ignore_reason(field: str, new: EoliaStatus) -> str:
     if field == "air_flow" and new.operation_mode in AIR_FLOW_UNSUPPORTED_MODES:
         return f"air flow isn't available in {new.operation_mode} mode"
     return "the unit did not apply it"
+
+
+_UNREACHABLE_MESSAGE = (
+    "Panasonic's cloud can't reach the AC (E-21291-01602). It is probably switched off at "
+    "the wall or has lost its Wi-Fi connection; this clears by itself once the unit is "
+    "back online."
+)
 
 
 class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
@@ -208,6 +216,8 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 "remote: the Eolia app, the physical remote, or the first change after Home "
                 "Assistant restarts. Wait 2 minutes, then try again."
             )
+        if isinstance(err, EoliaDeviceUnreachableError):
+            return HomeAssistantError(f"Failed to update {what}: {_UNREACHABLE_MESSAGE}")
         return HomeAssistantError(f"Failed to update {what}: {err}")
 
     def _remember_humidity(self, appliance_id: str, status: EoliaStatus) -> None:
@@ -256,6 +266,8 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 f"Eolia server rejected our request timestamp -- check this Home "
                 f"Assistant host's system clock: {err}"
             ) from err
+        except EoliaDeviceUnreachableError as err:
+            raise UpdateFailed(_UNREACHABLE_MESSAGE) from err
         except EoliaNetworkError as err:
             _LOGGER.debug(
                 "Transient network error fetching status for %s, retrying once: %s",

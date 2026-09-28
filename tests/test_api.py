@@ -31,6 +31,7 @@ from custom_components.eolia.exceptions import (
     EoliaApiError,
     EoliaClockSkewError,
     EoliaDeviceLockedError,
+    EoliaDeviceUnreachableError,
 )
 
 _STATUS_URL = f"{API_BASE_URL}/devices/APPLIANCE1/status"
@@ -183,6 +184,23 @@ async def test_device_locked_error_maps_to_dedicated_exception(hass, aioclient_m
     with pytest.raises(EoliaDeviceLockedError) as exc_info:
         await client.async_set_status("APPLIANCE1", {})
     assert exc_info.value.code == "E-21291-01718"
+    assert isinstance(exc_info.value, EoliaApiError)
+
+
+async def test_device_unreachable_error_maps_to_dedicated_exception(hass, aioclient_mock):
+    # Live 2026-09-27/28: GET /status while the AC was off/offline.
+    aioclient_mock.get(
+        _STATUS_URL,
+        status=400,
+        json={
+            "code": "E-21291-01602",
+            "message": "エアコンの情報取得に失敗しました。お手数ですが、しばらくしてから再度実行してください。",
+        },
+    )
+    client = EoliaApiClient(async_get_clientsession(hass), _make_auth())
+    with pytest.raises(EoliaDeviceUnreachableError) as exc_info:
+        await client.async_get_status("APPLIANCE1")
+    assert exc_info.value.code == "E-21291-01602"
     assert isinstance(exc_info.value, EoliaApiError)
 
 

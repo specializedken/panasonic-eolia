@@ -13,10 +13,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.eolia.const import CONTROL_REQUEST_FIELDS, CUSTOM_SETTINGS_REQUEST_FIELDS
 from custom_components.eolia.coordinator import EoliaDataUpdateCoordinator
-from custom_components.eolia.exceptions import EoliaApiError, EoliaDeviceLockedError
+from custom_components.eolia.exceptions import (
+    EoliaApiError,
+    EoliaDeviceLockedError,
+    EoliaDeviceUnreachableError,
+)
 from custom_components.eolia.models import EoliaCustomSettings, EoliaDevice, EoliaStatus
 
 APPLIANCE_ID = "EXAMPLEAPPLIANCEID0000000000000000000000000="
@@ -1135,3 +1140,22 @@ async def test_ordinary_status_writes_do_not_refetch_customsettings(coordinator,
     await coordinator.async_set_status(APPLIANCE_ID, wind_volume=3)
 
     coordinator.api.async_get_custom_settings.assert_not_awaited()
+
+
+async def test_unreachable_unit_gives_a_clear_update_error(coordinator):
+    # E-21291-01602 on GET /status: the cloud can't reach the AC (off / offline).
+    coordinator.api.async_get_status.side_effect = EoliaDeviceUnreachableError(
+        400, "E-21291-01602", "エアコンの情報取得に失敗しました。"
+    )
+    with pytest.raises(UpdateFailed, match="can't reach the AC.*E-21291-01602"):
+        await coordinator._async_update_data()
+    coordinator.api.async_get_status.assert_awaited_once()  # no retry
+
+
+async def test_unreachable_unit_gives_a_clear_write_error(coordinator, initial_status):
+    coordinator.async_set_updated_data({APPLIANCE_ID: initial_status})
+    coordinator.api.async_set_status.side_effect = EoliaDeviceUnreachableError(
+        400, "E-21291-01602", "エアコンの情報取得に失敗しました。"
+    )
+    with pytest.raises(HomeAssistantError, match="can't reach the AC"):
+        await coordinator.async_set_status(APPLIANCE_ID, wind_volume=3)
