@@ -284,3 +284,6 @@ be copied to `www/eolia-icons/` are out of date** — see "Icons" in the current
   `state.default.unavailable`, falling back to English; smaller font so the word fits), with no
   heading or "Currently" line, the -/+ buttons disabled, and the mode grid disabled. `unknown`
   is treated the same. Tests: 3 new (67 JS tests).
+  - **0.9.2**: the disabled mode buttons showed the busy (spinner) cursor because
+    `.eolia-mode[disabled]` had `cursor:progress`, meant for a write in flight. It is now
+    `default`, and `progress` only applies under `.eolia-pending` (set while `_pending`).

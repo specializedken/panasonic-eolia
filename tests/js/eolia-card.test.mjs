@@ -234,6 +234,7 @@ test("an unavailable unit reads 'Unavailable' in place of the temperature, like 
   assert.equal(minus(card).disabled, true);
   assert.equal(plus(card).disabled, true);
   assert.ok(buttons(card).every((b) => b.disabled)); // the mode picker can't act either
+  assert.ok(!/pending/.test(view(card, "modes").children[0].className)); // no busy cursor: nothing is in flight
 });
 
 test("'Unavailable' uses HA's localized string when there is one", async () => {
@@ -588,9 +589,11 @@ test("buttons are disabled while a write is pending, and re-enabled after", asyn
   const { card } = await render(ALL_RUNNING, { callService: () => new Promise((r) => { release = r; }) });
   const click = btn(card, mode("Blast")).click();
   assert.ok(buttons(card).every((b) => b.disabled));
+  assert.match(view(card, "modes").children[0].className, /eolia-pending/); // busy cursor while in flight
   release();
   await click;
   assert.ok(buttons(card).every((b) => !b.disabled));
+  assert.doesNotMatch(view(card, "modes").children[0].className, /eolia-pending/);
 });
 
 test("a refused mode change is shown to the user instead of swallowed", async () => {

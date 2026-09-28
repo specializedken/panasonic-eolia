@@ -38,7 +38,7 @@
  *                                # it) simply keeps Home Assistant's own icon.
  */
 
-const CARD_VERSION = "0.9.1";
+const CARD_VERSION = "0.9.2";
 
 // Entity rows in the stock settings card, in display order. Each is a translation_key, which is
 // also its id in the `controls` list. (The Dry humidity target and the double-temperature
@@ -94,7 +94,8 @@ const CSS = `
   color:var(--primary-text-color);font:inherit;font-size:12px;line-height:1.2;text-align:center;cursor:pointer}
 .eolia-mode[aria-pressed="true"]{border-color:var(--accent);
   background:color-mix(in srgb,var(--accent) 16%,var(--card-background-color))}
-.eolia-mode[disabled]{opacity:.55;cursor:progress}
+.eolia-mode[disabled]{opacity:.55;cursor:default}
+.eolia-pending .eolia-mode[disabled]{cursor:progress}
 .eolia-mode .ico{width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--accent)}
 .eolia-mode img{width:36px;height:36px;object-fit:contain}
 .eolia-mode ha-icon{--mdc-icon-size:32px}
@@ -686,7 +687,8 @@ class EoliaCard extends HTMLElement {
     const key = JSON.stringify([presets, current, isOff, unreachable, this._pending, this._config.icons, descriptions]);
     this._rebuild("modes", wrapper, key, () => {
       const grid = document.createElement("div");
-      grid.className = "eolia-modes";
+      // The busy cursor only while a write is in flight, not when the buttons are just unusable.
+      grid.className = this._pending != null ? "eolia-modes eolia-pending" : "eolia-modes";
       const add = (look, text, tip, active, onClick) => {
         const button = document.createElement("button");
         button.className = "eolia-mode";
