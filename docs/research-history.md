@@ -148,3 +148,45 @@ capability dependent), and the Resource-Owner-Password-Grant-is-disabled auth pr
 non-interactive HA setup (a real user needs to do the Authorization Code + PKCE dance at least
 once — browser + devtools is enough, no app/emulator needed for that part — then HA just needs
 to hold onto and refresh the resulting refresh_token).
+
+## 2026-09-25 — Can the unit be controlled locally, bypassing the cloud? (No.)
+
+Kevin's long-shot question. Three read-only probes against the real unit (CS-712DX2-W, "Yurt", at
+`192.0.2.10` on europa's LAN); nothing was written to it.
+
+**Finding the unit.** `hems_echonet_lite` discovers by multicast and stores no IP. A multicast
+`Get 0xD6` (instance list) to `224.0.23.0:3610` from a host-network container (bound to UDP 3610
+with `SO_REUSEADDR`) is answered by `.153` with one instance, `013001` (home air conditioner).
+The unit **answers only to UDP port 3610** — unicast probes from an ephemeral source port, or from
+a bridge-network (NAT'd) container, get no reply. The ARP entry `00:00:00:00:00:00` matches the
+tail of the ECHONET identification number `fe00000b00000130017061be97a3200000`.
+
+**1. ECHONET property maps (`0x9D`/`0x9E`/`0x9F`).**
+- Get map: `80 81 82 83 85 86 88 89 8a 8c 8f 93 9d 9e 9f a0 a1 a4 b0 b3 ba bb be` — all
+  standard-spec EPCs, **nothing in the manufacturer-specific range `0xF0`–`0xFF`**. No hidden
+  AI-mode / ECONAVI / nanoeX property. Only vendor-flavoured EPC: `0x86` (manufacturer fault
+  code, manufacturer `00000b`), diagnostics only.
+- Set map: `80 81 8f 93 a0 a1 a4 b0 b3 d0`. **`0xD0` is settable but not gettable** and I could not
+  identify it (not used by HA's `echonet_lite` for this device class). Untested: probing it means a
+  Set write, which needs Kevin's go-ahead.
+- Confirms the 2026-09-22 conclusion that the extras never touch ECHONET, now from the property
+  map rather than from behaviour alone.
+
+**2. Port scan.** TCP `-p-`: 0 open (63,135 closed, 2,400 filtered). UDP (plain sockets, no root):
+53/68/137/500/5353/8883/49152 answer ICMP unreachable (closed); 67/123/161/1900/5683/9000 were
+silent (inconclusive — ICMP rate limiting looks the same as open|filtered); 3610 is the live one.
+No local HTTP/SSH/MQTT/anything.
+
+**3. Decompiled app.** The only LAN-side endpoint is the **SoftAP onboarding API at
+`192.168.102.1`** (HTTP and HTTPS, `fe/o.java`; the HTTPS side loads the app's own bundled
+intermediate CA). `SoftAccessPointService` exposes `GetMacAddr`, `GetProfile`, `GetSecurityType`,
+`GetSsidList`, `GetStatus`, `PermitRequestRecv`, `SetIpAddr`, `SsidPskSetup`, `STAConnect`,
+`StartRegMode`, `StopRegMode` — Wi-Fi provisioning and cloud registration only, no operating
+commands. It exists only while the unit is in setup mode acting as an access point; once joined to
+the home Wi-Fi nothing listens (matches the TCP scan).
+
+**Conclusion.** Locally the unit speaks only ECHONET Lite's standard properties. The extras (Dry vs
+Cool & Dehumidify, AI mode, ECONAVI, nanoeX, per-mode settings) are cloud-side, so the cloud API
+in `findings.md` is the only path. Not done, and unlikely to pay off: passively watching the unit's
+outbound connection from the OpenWRT router (would show where it talks to Panasonic, but the TLS
+is opaque); probing `0xD0`.
