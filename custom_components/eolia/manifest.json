@@ -1,7 +1,7 @@
 {
   "domain": "eolia",
   "name": "Panasonic Eolia",
-  "codeowners": [],
+  "codeowners": ["@specializedken"],
   "config_flow": true,
   "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/specializedken/panasonic-eolia",
