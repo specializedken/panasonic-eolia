@@ -16,6 +16,22 @@ archived and no longer work.
 > **Status:** working and in daily use on one real unit (**CS-712DX2-W**, Eolia X). Nothing else
 > has been tested — see [Limitations](#limitations).
 
+## How this differs from other Panasonic integrations
+
+- **Comfort Cloud–based integrations** (e.g. [`panasonic_cc`](https://github.com/sockless-coding/panasonic_cc))
+  can't be used with these units. The Japanese Eolia app runs on its own cloud with its own accounts,
+  and the Comfort Cloud app does not accept an Eolia ID (tested with a Japanese Eolia account). This
+  integration talks to the Eolia cloud directly.
+- **Other regional apps** (Panasonic Smart App, Panasonic IoT TW, ...) have their own integrations
+  for their own clouds; none that we found targets the Japanese Eolia app.
+- **ECHONET Lite** (e.g. [`echonetlite_homeassistant`](https://github.com/scottyphillips/echonetlite_homeassistant))
+  works locally and is a fine fallback, but only exposes whole-degree setpoints and generic modes
+  (see above).
+- **Earlier Eolia clients** ([`panasonic_eolia`](https://github.com/avolmensky/panasonic_eolia)) are
+  archived and no longer work.
+
+This integration also ships a Lovelace card and keeps per-mode settings.
+
 ## What you get
 
 Per air conditioner:
@@ -169,4 +185,4 @@ repository, remove that folder (the card still works without it).
 
 ## License
 
-No license has been chosen yet, so the default applies: all rights reserved.
+The code is released under the [MIT License](LICENSE). The Panasonic icons mentioned above are not part of it.
