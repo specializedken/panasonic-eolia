@@ -24,7 +24,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from . import EoliaConfigEntry
-from .const import DOUBLE_MODE_TEMP_MIN_GAP, OPERATION_MODE_TOOLTIPS, EoliaOperationMode
+from .const import (
+    DOUBLE_MODE_TEMP_MIN_GAP,
+    OPERATION_MODE_TOOLTIPS,
+    EoliaOperationMode,
+    operation_mode_key,
+)
 from .controls import applicable_controls
 from .coordinator import EoliaDataUpdateCoordinator
 from .entity import EoliaEntity
@@ -41,15 +46,15 @@ class EoliaSensorEntityDescription(SensorEntityDescription):
 
 
 def _operation_mode(status: EoliaStatus) -> str:
-    """The raw wire `operation_mode`, with unknown values folded into `Other`.
+    """The wire `operation_mode` as its HA key, with unknown values folded into `Other`.
 
     An ENUM sensor raises if its state isn't one of `options`, and the server can return
     modes this integration has never seen (models.py just passes the string through).
     """
     try:
-        return EoliaOperationMode(status.operation_mode).value
+        return operation_mode_key(EoliaOperationMode(status.operation_mode).value)
     except ValueError:
-        return EoliaOperationMode.OTHER.value
+        return operation_mode_key(EoliaOperationMode.OTHER.value)
 
 
 SENSOR_DESCRIPTIONS: tuple[EoliaSensorEntityDescription, ...] = (
@@ -62,13 +67,15 @@ SENSOR_DESCRIPTIONS: tuple[EoliaSensorEntityDescription, ...] = (
         key="operation_mode",
         translation_key="operation_mode",
         device_class=SensorDeviceClass.ENUM,
-        options=[mode.value for mode in EoliaOperationMode],
+        options=[operation_mode_key(mode.value) for mode in EoliaOperationMode],
         value_fn=_operation_mode,
         # Which controls currently do anything (controls.py) plus the picker's tooltip text;
         # the Lovelace card renders from these and holds no rules or copy of its own.
         attrs_fn=lambda status: {
             "controls": list(applicable_controls(status)),
-            "mode_descriptions": OPERATION_MODE_TOOLTIPS,
+            "mode_descriptions": {
+                operation_mode_key(mode): text for mode, text in OPERATION_MODE_TOOLTIPS.items()
+            },
             "double_temp_min_gap": DOUBLE_MODE_TEMP_MIN_GAP,
         },
     ),

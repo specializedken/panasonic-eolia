@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.eolia.const import EoliaOperationMode
+from custom_components.eolia.const import EoliaOperationMode, operation_mode_key
 from custom_components.eolia.models import EoliaStatus
 from custom_components.eolia.sensor import SENSOR_DESCRIPTIONS
 
@@ -15,14 +15,14 @@ def _description(key: str):
 
 def test_operation_mode_options_match_enum():
     assert _description("operation_mode").options == [
-        mode.value for mode in EoliaOperationMode
+        operation_mode_key(mode.value) for mode in EoliaOperationMode
     ]
 
 
 @pytest.mark.parametrize("mode", list(EoliaOperationMode))
-def test_operation_mode_reports_every_known_mode_verbatim(status_response, mode):
+def test_operation_mode_reports_every_known_mode_as_its_key(status_response, mode):
     status = EoliaStatus.from_dict({**status_response, "operation_mode": mode.value})
-    assert _description("operation_mode").value_fn(status) == mode.value
+    assert _description("operation_mode").value_fn(status) == operation_mode_key(mode.value)
 
 
 def test_operation_mode_folds_unknown_values_into_other(status_response):
@@ -31,7 +31,7 @@ def test_operation_mode_folds_unknown_values_into_other(status_response):
     status = EoliaStatus.from_dict(
         {**status_response, "operation_mode": "SomethingNew"}
     )
-    assert _description("operation_mode").value_fn(status) == "Other"
+    assert _description("operation_mode").value_fn(status) == "other"
 
 
 def test_operation_mode_sensor_exposes_applicable_controls(status_response):
@@ -67,7 +67,9 @@ def test_operation_mode_sensor_exposes_the_tooltips_but_does_not_record_them(sta
     from custom_components.eolia.sensor import EoliaSensor
 
     attrs = _description("operation_mode").attrs_fn(EoliaStatus.from_dict(status_response))
-    assert attrs["mode_descriptions"] == OPERATION_MODE_TOOLTIPS
+    assert attrs["mode_descriptions"] == {
+        operation_mode_key(mode): text for mode, text in OPERATION_MODE_TOOLTIPS.items()
+    }
     assert "mode_descriptions" in EoliaSensor._unrecorded_attributes
 
 

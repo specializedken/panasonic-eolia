@@ -23,7 +23,11 @@ from custom_components.eolia.climate import (
     _SWING_MODES,
     EoliaClimateEntity,
 )
-from custom_components.eolia.const import WIND_DIRECTION_SWING, EoliaOperationMode
+from custom_components.eolia.const import (
+    WIND_DIRECTION_SWING,
+    EoliaOperationMode,
+    operation_mode_key,
+)
 from custom_components.eolia.coordinator import EoliaDataUpdateCoordinator
 from custom_components.eolia.models import EoliaDevice, EoliaStatus
 
@@ -270,7 +274,7 @@ async def test_keep_mode_preset_is_routed_through_customsettings(coordinator):
     coordinator.async_set_custom_settings = AsyncMock()
     entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
 
-    await entity.async_set_preset_mode(EoliaOperationMode.KEEP_MODE.value)
+    await entity.async_set_preset_mode("keep_mode")
 
     coordinator.async_set_custom_settings.assert_awaited_once_with(
         APPLIANCE_ID, double_mode_temp_status=True
@@ -300,15 +304,15 @@ def test_preset_modes_are_filtered_by_the_models_functions(coordinator):
     }
     entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
 
-    assert EoliaOperationMode.SMELL_CARE_SPOT.value not in entity.preset_modes
-    assert EoliaOperationMode.SMELL_CARE.value in entity.preset_modes
+    assert "smell_care_spot" not in entity.preset_modes
+    assert "smell_care" in entity.preset_modes
     # Modes with no flag in the app's picker are never filtered.
-    assert EoliaOperationMode.COOLING.value in entity.preset_modes
+    assert "cooling" in entity.preset_modes
 
 
 def test_preset_modes_are_unfiltered_when_functions_are_unknown(coordinator):
     entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
-    assert entity.preset_modes == _SETTABLE_PRESET_MODES
+    assert entity.preset_modes == [operation_mode_key(m) for m in _SETTABLE_PRESET_MODES]
 
 
 @pytest.mark.parametrize(
@@ -485,5 +489,28 @@ def test_filtering_by_model_keeps_the_order(coordinator):
     coordinator.functions[APPLIANCE_ID] = {"smell_care": False, "moist_cooling": False}
     entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
     modes = entity.preset_modes
-    assert "SmellCare" not in modes and "MoistCooling" not in modes
-    assert modes == [m for m in _SETTABLE_PRESET_MODES if m in modes]
+    assert "smell_care" not in modes and "moist_cooling" not in modes
+    keys = [operation_mode_key(m) for m in _SETTABLE_PRESET_MODES]
+    assert modes == [k for k in keys if k in modes]
+
+
+def test_preset_mode_is_the_lowercase_key(coordinator):
+    status = EoliaStatus.from_dict(
+        {"appliance_id": APPLIANCE_ID, "operation_status": True, "operation_mode": "KeepMode"}
+    )
+    coordinator.async_set_updated_data({APPLIANCE_ID: status})
+    assert EoliaClimateEntity(coordinator, APPLIANCE_ID).preset_mode == "keep_mode"
+
+
+@pytest.mark.parametrize("preset", ["cool_dehumidifying", "CoolDehumidifying"])
+async def test_set_preset_mode_sends_the_wire_value(coordinator, preset):
+    # The key is what HA shows; the wire value (pre-0.10 automations) is still accepted.
+    coordinator.async_set_updated_data({APPLIANCE_ID: _status(operation_status=True)})
+    coordinator.async_set_status = AsyncMock()
+    entity = EoliaClimateEntity(coordinator, APPLIANCE_ID)
+
+    await entity.async_set_preset_mode(preset)
+
+    coordinator.async_set_status.assert_awaited_once_with(
+        APPLIANCE_ID, operation_status=True, operation_mode="CoolDehumidifying"
+    )

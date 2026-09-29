@@ -8,6 +8,7 @@ re-confirming against docs/findings.md or fresh live traffic -- these are not gu
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 
 DOMAIN = "eolia"
@@ -86,6 +87,24 @@ class EoliaOperationMode(StrEnum):
     CLEANING = "Cleaning"
     STOP = "Stop"
     OTHER = "Other"
+
+
+def operation_mode_key(mode: str) -> str:
+    """The Home Assistant-facing key of a wire operation_mode: `KeepMode` -> `keep_mode`.
+
+    HA requires the keys of a state translation to be lowercase (`[a-z0-9-_]+`), so the sensor
+    state and the climate preset are exposed under these keys. The wire values themselves
+    (EoliaOperationMode, the coordinator, the API) are untouched.
+    """
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", mode).lower()
+
+
+_WIRE_MODE_BY_KEY = {operation_mode_key(mode.value): mode.value for mode in EoliaOperationMode}
+
+
+def operation_mode_from_key(key: str) -> str:
+    """Inverse of operation_mode_key. A wire value (the pre-0.10 preset names) also works."""
+    return _WIRE_MODE_BY_KEY.get(key, key)
 
 
 # Short, human-readable descriptions of what each operation_mode actually does --

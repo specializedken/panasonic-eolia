@@ -73,10 +73,10 @@ const KEYS = {
   double_temp_low: "number.aircon_lo", double_temp_high: "number.aircon_hi",
   indoor_temperature: "sensor.aircon_in", indoor_humidity: "sensor.aircon_h", outdoor_temperature: "sensor.aircon_out",
 };
-const DESCRIPTIONS = { Auto: "Picks automatically.", Blast: "Fan only.", KeepMode: "Double temp." };
+const DESCRIPTIONS = { auto: "Picks automatically.", blast: "Fan only.", keep_mode: "Double temp." };
 
 function makeHass(controls, {
-  otherDevice = true, presets = ["Auto", "Cooling", "Blast", "KeepMode"], current = "Cooling",
+  otherDevice = true, presets = ["auto", "cooling", "blast", "keep_mode"], current = "cooling",
   climateState = "cool", callService, temperature = 24, descriptions = DESCRIPTIONS, humidityState = "55", minGap = 5,
 } = {}) {
   const entities = {};
@@ -93,7 +93,7 @@ function makeHass(controls, {
     entities,
     config: { unit_system: { temperature: "°C" } },
     states: {
-      [KEYS.operation_mode]: { state: "Cooling", attributes: attrs },
+      [KEYS.operation_mode]: { state: "cooling", attributes: attrs },
       [KEYS.climate]: {
         state: climateState,
         attributes: {
@@ -509,13 +509,13 @@ const mode = (name) => `preset_mode:${name}`;
 test("picker: Off first, then one button per preset in the order given; active one pressed", async () => {
   const { card } = await render(ALL_RUNNING);
   const b = buttons(card);
-  assert.deepEqual(plain(b.map(labelOf)), ["Off", mode("Auto"), mode("Cooling"), mode("Blast"), mode("KeepMode")]);
+  assert.deepEqual(plain(b.map(labelOf)), ["Off", mode("auto"), mode("cooling"), mode("blast"), mode("keep_mode")]);
   assert.deepEqual(plain(b.map((x) => x.attrs["aria-pressed"])), ["false", "false", "true", "false", "false"]);
 });
 
 test("the card keeps no ordering of its own: it shows the integration's order (Off aside)", async () => {
-  const requested = ["Auto", "ComfortableDehumidification", "Cooling", "CoolDehumidifying", "MoistCooling",
-    "Heating", "KeepMode", "ClothesDryer", "SmellCare", "NanoexCleaning", "Cleaning"];
+  const requested = ["auto", "comfortable_dehumidification", "cooling", "cool_dehumidifying", "moist_cooling",
+    "heating", "keep_mode", "clothes_dryer", "smell_care", "nanoex_cleaning", "cleaning"];
   const { card } = await render(ALL_RUNNING, { presets: requested });
   assert.deepEqual(plain(buttons(card).map(labelOf)), ["Off", ...requested.map(mode)]);
   const reversed = [...requested].reverse();
@@ -525,9 +525,9 @@ test("the card keeps no ordering of its own: it shows the integration's order (O
 
 test("picker buttons carry the integration's tooltips", async () => {
   const { card } = await render(ALL_RUNNING);
-  assert.equal(btn(card, mode("Auto")).title, "Picks automatically.");
-  assert.equal(btn(card, mode("Blast")).title, "Fan only.");
-  assert.equal(btn(card, mode("Cooling")).title, ""); // no description supplied for Cooling in this fixture
+  assert.equal(btn(card, mode("auto")).title, "Picks automatically.");
+  assert.equal(btn(card, mode("blast")).title, "Fan only.");
+  assert.equal(btn(card, mode("cooling")).title, ""); // no description supplied for Cooling in this fixture
   assert.equal(btn(card, "Off").title, "Turn the unit off.");
 });
 
@@ -554,16 +554,16 @@ test("clicking Off while already off is a no-op", async () => {
 
 test("modes with an app icon use it from the icons dir; others fall back to mdi", async () => {
   const { card } = await render(ALL_RUNNING);
-  const auto = iconOf(btn(card, mode("Auto")));
+  const auto = iconOf(btn(card, mode("auto")));
   assert.equal(auto.tag, "img");
   assert.equal(auto.src, "/eolia_static/icons/modes/v6_drive_mode_automatic.png");
-  assert.equal(iconOf(btn(card, mode("Cooling"))).attrs.icon, "mdi:snowflake"); // the app has no Cooling icon
+  assert.equal(iconOf(btn(card, mode("cooling"))).attrs.icon, "mdi:snowflake"); // the app has no Cooling icon
   assert.equal(iconOf(btn(card, "Off")).attrs.icon, "mdi:power");
 });
 
 test("a missing icon file falls back to the mdi icon", async () => {
   const { card } = await render(ALL_RUNNING);
-  const button = btn(card, mode("Auto"));
+  const button = btn(card, mode("auto"));
   iconOf(button).onerror();
   assert.equal(iconOf(button).attrs.icon, "mdi:autorenew");
 });
@@ -572,22 +572,22 @@ test("icons: false and a custom icons path are honoured", async () => {
   const off = await render(ALL_RUNNING, undefined, { icons: false });
   assert.ok(buttons(off.card).every((b) => iconOf(b).tag === "ha-icon"));
   const custom = await render(ALL_RUNNING, undefined, { icons: "/local/x" });
-  assert.equal(iconOf(btn(custom.card, mode("Auto"))).src, "/local/x/modes/v6_drive_mode_automatic.png");
+  assert.equal(iconOf(btn(custom.card, mode("auto"))).src, "/local/x/modes/v6_drive_mode_automatic.png");
 });
 
 test("clicking a mode calls climate.set_preset_mode; the current mode is a no-op", async () => {
   const calls = [];
   const { card } = await render(ALL_RUNNING, { callService: async (...a) => { calls.push(a); } });
-  await btn(card, mode("Cooling")).click(); // current
+  await btn(card, mode("cooling")).click(); // current
   assert.equal(calls.length, 0);
-  await btn(card, mode("Blast")).click();
-  assert.deepEqual(plain(calls), [["climate", "set_preset_mode", { entity_id: KEYS.climate, preset_mode: "Blast" }]]);
+  await btn(card, mode("blast")).click();
+  assert.deepEqual(plain(calls), [["climate", "set_preset_mode", { entity_id: KEYS.climate, preset_mode: "blast" }]]);
 });
 
 test("buttons are disabled while a write is pending, and re-enabled after", async () => {
   let release;
   const { card } = await render(ALL_RUNNING, { callService: () => new Promise((r) => { release = r; }) });
-  const click = btn(card, mode("Blast")).click();
+  const click = btn(card, mode("blast")).click();
   assert.ok(buttons(card).every((b) => b.disabled));
   assert.match(view(card, "modes").children[0].className, /eolia-pending/); // busy cursor while in flight
   release();
@@ -598,7 +598,7 @@ test("buttons are disabled while a write is pending, and re-enabled after", asyn
 
 test("a refused mode change is shown to the user instead of swallowed", async () => {
   const { card } = await render(ALL_RUNNING, { callService: async () => { throw new Error("KeepMode can't do that"); } });
-  await btn(card, mode("KeepMode")).click();
+  await btn(card, mode("keep_mode")).click();
   const [event] = card.dispatched;
   assert.equal(event.type, "hass-notification");
   assert.equal(event.detail.message, "KeepMode can't do that");

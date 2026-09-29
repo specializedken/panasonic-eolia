@@ -65,22 +65,22 @@ const ROOM_KEYS = ["indoor_temperature", "indoor_humidity", "outdoor_temperature
 // under <icons>/modes/ from tools/extract_icons.py -- only modes the app actually has an icon
 // for; `mdi` is the fallback; `color` is the app's own accent for that mode family.
 const MODE_STYLE = {
-  Auto: { icon: "v6_drive_mode_automatic", mdi: "mdi:autorenew", color: "#9ccc65" },
-  Cooling: { mdi: "mdi:snowflake", color: "#65accc" },
-  Heating: { mdi: "mdi:fire", color: "#c19270" },
-  KeepHeating: { mdi: "mdi:fire", color: "#c19270" },
-  Blast: { icon: "v6_drive_mode_blower", mdi: "mdi:fan", color: "#70c1a3" },
-  Dehumidifying: { icon: "v6_drive_mode_dehumidity", mdi: "mdi:water-percent", color: "#70c1a2" },
-  CoolDehumidifying: { mdi: "mdi:snowflake-melt", color: "#65accc" },
-  ComfortableDehumidification: { icon: "v6_drive_mode_dehumidity", mdi: "mdi:water-percent", color: "#70c1a2" },
-  ClothesDryer: { icon: "v6_drive_mode_clothes_drying", mdi: "mdi:tshirt-crew", color: "#70c1a3" },
-  MoistCooling: { icon: "v6_drive_mode_moist_cooling", mdi: "mdi:snowflake", color: "#65accc" },
-  AutoTempControl: { mdi: "mdi:thermostat-auto", color: "#9ccc65" },
-  KeepMode: { mdi: "mdi:thermometer-lines", color: "#c19270" },
-  SmellCare: { icon: "v6_drive_mode_smell_care", mdi: "mdi:scent", color: "#aa93d0" },
-  SmellCareSpot: { icon: "v6_drive_mode_smell_care", mdi: "mdi:scent", color: "#aa93d0" },
-  NanoexCleaning: { icon: "v6_drive_mode_nanoex", mdi: "mdi:shimmer", color: "#aa93d0" },
-  Cleaning: { icon: "v6_drive_mode_cleaning", mdi: "mdi:broom", color: "#aa93d0" },
+  auto: { icon: "v6_drive_mode_automatic", mdi: "mdi:autorenew", color: "#9ccc65" },
+  cooling: { mdi: "mdi:snowflake", color: "#65accc" },
+  heating: { mdi: "mdi:fire", color: "#c19270" },
+  keep_heating: { mdi: "mdi:fire", color: "#c19270" },
+  blast: { icon: "v6_drive_mode_blower", mdi: "mdi:fan", color: "#70c1a3" },
+  dehumidifying: { icon: "v6_drive_mode_dehumidity", mdi: "mdi:water-percent", color: "#70c1a2" },
+  cool_dehumidifying: { mdi: "mdi:snowflake-melt", color: "#65accc" },
+  comfortable_dehumidification: { icon: "v6_drive_mode_dehumidity", mdi: "mdi:water-percent", color: "#70c1a2" },
+  clothes_dryer: { icon: "v6_drive_mode_clothes_drying", mdi: "mdi:tshirt-crew", color: "#70c1a3" },
+  moist_cooling: { icon: "v6_drive_mode_moist_cooling", mdi: "mdi:snowflake", color: "#65accc" },
+  auto_temp_control: { mdi: "mdi:thermostat-auto", color: "#9ccc65" },
+  keep_mode: { mdi: "mdi:thermometer-lines", color: "#c19270" },
+  smell_care: { icon: "v6_drive_mode_smell_care", mdi: "mdi:scent", color: "#aa93d0" },
+  smell_care_spot: { icon: "v6_drive_mode_smell_care", mdi: "mdi:scent", color: "#aa93d0" },
+  nanoex_cleaning: { icon: "v6_drive_mode_nanoex", mdi: "mdi:shimmer", color: "#aa93d0" },
+  cleaning: { icon: "v6_drive_mode_cleaning", mdi: "mdi:broom", color: "#aa93d0" },
 };
 const DEFAULT_MODE_STYLE = { mdi: "mdi:air-conditioner", color: "var(--primary-color)" };
 const OFF_STYLE = { mdi: "mdi:power", color: "var(--secondary-text-color)" };

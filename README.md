@@ -28,6 +28,8 @@ Per air conditioner:
 | `sensor` | Operation mode (the raw mode the unit reports), indoor temperature, indoor humidity, outdoor temperature |
 | `switch` | nanoeX, Quiet mode |
 
+> **0.10.0:** the `operation_mode` sensor state and the climate `preset_mode` are now lowercase keys (`keep_mode`, `cool_dehumidifying`, ...). `climate.set_preset_mode` still accepts the old names, but any automation that *compares* against the old names (`KeepMode`, ...) needs updating.
+
 Air-quality entities (a monitoring switch and two sensors) are created **only on models that report
 the feature**; the CS-712DX2-W does not, so none appear there.
 

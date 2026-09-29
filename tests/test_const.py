@@ -10,6 +10,7 @@ undocumented (or show as a raw wire string in the HA UI) in either place.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from custom_components.eolia.const import (
@@ -18,6 +19,8 @@ from custom_components.eolia.const import (
     WIND_VOLUME_LEVELS,
     EoliaOperationMode,
     EoliaWindDirectionHorizon,
+    operation_mode_from_key,
+    operation_mode_key,
 )
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -42,8 +45,28 @@ def _state_attribute_keys(translations_file: str, attribute: str) -> set[str]:
 
 
 def test_strings_json_preset_mode_translations_cover_every_mode():
-    valid_values = {mode.value for mode in EoliaOperationMode}
+    valid_values = {operation_mode_key(mode.value) for mode in EoliaOperationMode}
     assert _state_attribute_keys("strings.json", "preset_mode") == valid_values
+
+
+def test_strings_json_operation_mode_sensor_translations_cover_every_mode():
+    data = json.loads((REPO_ROOT / "custom_components" / "eolia" / "strings.json").read_text())
+    keys = set(data["entity"]["sensor"]["operation_mode"]["state"])
+    assert keys == {operation_mode_key(mode.value) for mode in EoliaOperationMode}
+
+
+def test_operation_mode_keys_are_valid_hassfest_translation_keys():
+    # hassfest rejects state translation keys outside [a-z0-9-_]+ (or starting/ending with - or _)
+    for mode in EoliaOperationMode:
+        assert re.fullmatch(r"[a-z0-9]+(?:[-_][a-z0-9]+)*", operation_mode_key(mode.value))
+
+
+def test_operation_mode_key_round_trips_and_accepts_wire_values():
+    assert operation_mode_key("KeepMode") == "keep_mode"
+    assert operation_mode_key("ComfortableDehumidification") == "comfortable_dehumidification"
+    for mode in EoliaOperationMode:
+        assert operation_mode_from_key(operation_mode_key(mode.value)) == mode.value
+        assert operation_mode_from_key(mode.value) == mode.value  # pre-0.10 automations
 
 
 def test_strings_json_fan_mode_translations_cover_every_level():

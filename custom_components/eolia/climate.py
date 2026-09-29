@@ -1,7 +1,7 @@
 """Climate platform for the Eolia integration.
 
 hvac_mode carries a coarse bucket for standard thermostat-card/voice-assistant
-compatibility; preset_mode carries the exact operation_mode wire value as the real
+compatibility; preset_mode carries the exact operation_mode (as a lowercase key, e.g. keep_mode) as the real
 source of truth. This is a deliberate design choice (see the Phase 1 plan) -- HA's fixed
 HVACMode enum can't represent Eolia's ~16 operation_mode values, and the whole point of
 this project was to expose distinctions like Dry (ComfortableDehumidification) vs Cool &
@@ -35,6 +35,8 @@ from .const import (
     WIND_VOLUME_LEVELS,
     EoliaOperationMode,
     EoliaWindDirectionHorizon,
+    operation_mode_from_key,
+    operation_mode_key,
 )
 from .coordinator import EoliaDataUpdateCoordinator
 from .entity import EoliaEntity
@@ -183,7 +185,7 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
     def preset_modes(self) -> list[str]:
         """Only modes this model supports (per /products/{code}/functions)."""
         return [
-            mode
+            operation_mode_key(mode)
             for mode in _SETTABLE_PRESET_MODES
             if self.coordinator.supports(
                 self._appliance_id,
@@ -223,7 +225,7 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
         status = self._status
         if status is None or status.operation_mode == EoliaOperationMode.OTHER:
             return None
-        return status.operation_mode
+        return operation_mode_key(status.operation_mode)
 
     @property
     def current_temperature(self) -> float | None:
@@ -276,6 +278,8 @@ class EoliaClimateEntity(EoliaEntity, ClimateEntity):
         )
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
+        # The preset is the lowercase HA key (`keep_mode`); the wire value (`KeepMode`) also works.
+        preset_mode = operation_mode_from_key(preset_mode)
         if preset_mode == EoliaOperationMode.KEEP_MODE:
             # Live-confirmed 2026-09-23: operation_mode=KeepMode via /status is always
             # rejected (E-21291-01711). The mode is entered by enabling

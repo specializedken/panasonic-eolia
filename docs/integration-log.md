@@ -506,3 +506,17 @@ this repo as a design doc if that plan file isn't available in a future session)
     power-offs (remote and app too); the integration doesn't cause or prevent that. Kevin
     chose to keep Off manual rather than auto-cancelling the cycle (the cycle is probably
     Panasonic's internal drying, so cutting it short every time isn't obviously wise).
+
+- **0.10.0 -- HA-facing operation modes are lowercase keys (2026-09-29).** hassfest (added with the
+  HACS workflows) rejects state-translation keys outside `[a-z0-9-_]+`, and the `operation_mode`
+  sensor state and the climate `preset_mode` were the raw wire values (`KeepMode`, ...). Both now
+  use `operation_mode_key()` (`const.py`): `KeepMode` -> `keep_mode`, `ComfortableDehumidification`
+  -> `comfortable_dehumidification`. Only the HA boundary changed -- the wire values
+  (`EoliaOperationMode`), the coordinator, profiles, `controls.py` and `OPERATION_MODE_TOOLTIPS`
+  are untouched; the sensor's `mode_descriptions` attribute is re-keyed on the way out, and the
+  card's `MODE_STYLE` uses the keys. `climate.set_preset_mode` still accepts the old wire names
+  (`operation_mode_from_key` falls back to the input), so existing automations keep working; the
+  sensor state and `preset_mode` attribute, however, now read lowercase, so **state triggers,
+  conditions and templates comparing them to the old names must be updated**. Also added
+  `CONFIG_SCHEMA` (hassfest warning), an MIT `LICENSE` (HACS check), `codeowners`, and
+  `brand/icon.png`. 315 Python + 67 JS tests. Manifest 0.10.0 (card JS changed).
