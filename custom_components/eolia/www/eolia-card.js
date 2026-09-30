@@ -238,7 +238,7 @@ class EoliaCard extends HTMLElement {
 
   /** Rebuild `wrapper` only when `key` changes, so icons/inputs don't flicker on every poll. */
   _rebuild(id, wrapper, key, build) {
-    const view = (this._views[id] ||= {});
+    const view = (this._views[id] = this._views[id] || {});
     if (view.key === key) return;
     view.key = key;
     if (!view.card) {
@@ -435,7 +435,7 @@ class EoliaCard extends HTMLElement {
   _commit(stepper, raw, linked = []) {
     if (!Number.isFinite(raw)) return;
     const next = snap(raw, stepper.step, stepper.min, stepper.max);
-    const edit = (this._edits[stepper.key] ||= {});
+    const edit = (this._edits[stepper.key] = this._edits[stepper.key] || {});
     clearTimeout(edit.timer);
     edit.value = next;
     edit.linked = linked.map((l) => l.key);
@@ -498,7 +498,7 @@ class EoliaCard extends HTMLElement {
       return;
     }
     wrapper.hidden = false;
-    const view = (this._views.setpoint ||= {});
+    const view = (this._views.setpoint = this._views.setpoint || {});
     view.sp = sp; // handlers created below always read the latest spec from here
     // Build once per shape; afterwards update in place, so a poll can't interrupt a drag.
     const shape = JSON.stringify([sp.dual, sp.steppers.map((s) => [s.key, s.min, s.max, s.step])]);
