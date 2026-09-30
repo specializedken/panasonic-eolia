@@ -38,7 +38,7 @@
  *                                # it) simply keeps Home Assistant's own icon.
  */
 
-const CARD_VERSION = "0.9.2";
+const CARD_VERSION = "0.10.2";
 
 // Entity rows in the stock settings card, in display order. Each is a translation_key, which is
 // also its id in the `controls` list. (The Dry humidity target and the double-temperature
@@ -854,8 +854,21 @@ class EoliaCard extends HTMLElement {
   }
 }
 
-if (!customElements.get("eolia-card")) {
-  customElements.define("eolia-card", EoliaCard);
+// Register only once the frontend is up. Home Assistant's core installs a scoped-registry polyfill
+// over `customElements`; `add_extra_js_url` runs this file as an inline `import()` that can beat it,
+// and a definition made before the polyfill is invisible to Lovelace ("Custom element doesn't
+// exist: eolia-card" although the script loaded and ran). `home-assistant` is defined by the
+// frontend itself, after the polyfill, so waiting for it puts us in the same registry as the stock
+// cards. Without whenDefined (or if it never fires) we fall back to defining straight away.
+function registerEoliaCard() {
+  if (!customElements.get("eolia-card")) {
+    customElements.define("eolia-card", EoliaCard);
+  }
+}
+if (typeof customElements.whenDefined === "function") {
+  customElements.whenDefined("home-assistant").then(registerEoliaCard, registerEoliaCard);
+} else {
+  registerEoliaCard();
 }
 
 window.customCards = window.customCards || [];

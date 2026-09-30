@@ -24,7 +24,7 @@ class FakeEl {
   click() { return this.listeners.click[0](); }
 }
 
-function loadCard() {
+function loadCard({ whenDefined } = {}) {
   const cards = new Map();
   const created = [];
   const timers = new Map();
@@ -46,7 +46,7 @@ function loadCard() {
   const ctx = {
     HTMLElement: FakeEl,
     document: { createElement: (t) => new FakeEl(t) },
-    customElements: { get: (n) => cards.get(n), define: (n, c) => cards.set(n, c) },
+    customElements: { get: (n) => cards.get(n), define: (n, c) => cards.set(n, c), ...(whenDefined && { whenDefined }) },
     window: { loadCardHelpers: async () => helpers },
     console: { info() {} },
     Image: FakeImage,
@@ -61,7 +61,7 @@ function loadCard() {
     timers.clear();
     for (const f of fns) await f();
   };
-  return { Card: cards.get("eolia-card"), created, timers, fireTimers, images };
+  return { cards, Card: cards.get("eolia-card"), created, timers, fireTimers, images };
 }
 
 const KEYS = {
@@ -759,4 +759,22 @@ test("room glance lists only sensors that exist", async () => {
   assert.deepEqual(plain(slot(card, "room").element.config.entities), [
     KEYS.indoor_temperature, KEYS.indoor_humidity, KEYS.outdoor_temperature,
   ]);
+});
+
+test("registration waits for the frontend (home-assistant) so the polyfilled registry gets it", async () => {
+  let ready;
+  const asked = [];
+  const env = loadCard({ whenDefined: (n) => { asked.push(n); return new Promise((r) => { ready = r; }); } });
+  assert.deepEqual(asked, ["home-assistant"]);
+  assert.equal(env.cards.get("eolia-card"), undefined, "must not define before the frontend is ready");
+  ready();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.ok(env.cards.get("eolia-card"), "defined once home-assistant is");
+});
+
+test("registration still happens if whenDefined rejects", async () => {
+  const env = loadCard({ whenDefined: () => Promise.reject(new Error("x")) });
+  await new Promise((r) => setImmediate(r));
+  assert.ok(env.cards.get("eolia-card"));
 });

@@ -287,3 +287,10 @@ be copied to `www/eolia-icons/` are out of date** — see "Icons" in the current
   - **0.9.2**: the disabled mode buttons showed the busy (spinner) cursor because
     `.eolia-mode[disabled]` had `cursor:progress`, meant for a write in flight. It is now
     `default`, and `progress` only applies under `.eolia-pending` (set while `_pending`).
+  - **0.10.2 (2026-09-30)**: "Custom element doesn't exist: eolia-card" in the Android app although
+    the script loaded (200) and ran. Diagnosed over CDP on the real phone (WebView 153): the card's
+    `customElements.define` ran ~58 ms *before* HA's frontend installed its scoped-registry polyfill
+    (inline `import()` from `add_extra_js_url` beats the core bundle), so the polyfill's own map never
+    had it (`customElements.get` false, but `window.customCards` set). Now the card defines itself after
+    `customElements.whenDefined("home-assistant")`, falling back to an immediate define when `whenDefined`
+    is missing or rejects. Also fixed the stale `CARD_VERSION` banner. Not yet verified on the phone.
