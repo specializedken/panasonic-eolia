@@ -92,3 +92,15 @@ def devices_response() -> dict:
 def customsettings_response() -> dict:
     """Real GET .../customsettings body (2026-09-23 capture, no operation_token -- GET-only)."""
     return _load_fixture("customsettings_response.json")
+
+
+@pytest.fixture
+def eco_current_response() -> dict:
+    """Real GET /devices/{id}/eco/current (live, 2026-10-02)."""
+    return _load_fixture("eco_current_response.json")
+
+
+@pytest.fixture
+def eco_history_response() -> dict:
+    """Real GET /devices/{id}/eco/history (live, 2026-10-02)."""
+    return _load_fixture("eco_history_response.json")

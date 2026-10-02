@@ -19,21 +19,24 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from . import EoliaConfigEntry
 from .const import (
+    DOMAIN,
     DOUBLE_MODE_TEMP_MIN_GAP,
     OPERATION_MODE_TOOLTIPS,
     EoliaOperationMode,
     operation_mode_key,
 )
 from .controls import applicable_controls
-from .coordinator import EoliaDataUpdateCoordinator
+from .coordinator import EoliaDataUpdateCoordinator, EoliaEcoCoordinator
 from .entity import EoliaEntity
-from .models import EoliaStatus
+from .models import EoliaEco, EoliaStatus
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -124,6 +127,48 @@ SENSOR_DESCRIPTIONS: tuple[EoliaSensorEntityDescription, ...] = (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
+class EoliaEcoSensorEntityDescription(SensorEntityDescription):
+    """Describes an estimated-cost sensor (values come from the eco coordinator)."""
+
+    value_fn: Callable[[EoliaEco], StateType]
+    attrs_fn: Callable[[EoliaEco], dict[str, Any]] | None = None
+
+
+# Panasonic's own app-side estimate in yen -- there is no watts/kWh anywhere in the cloud API
+# (docs/findings.md, "Power/eco history"). Deliberately no state_class: these are Panasonic's
+# rounded estimates, not a meter, so they don't belong in the Energy dashboard's statistics.
+ECO_SENSOR_DESCRIPTIONS: tuple[EoliaEcoSensorEntityDescription, ...] = (
+    # While running: the current run's cost so far. Once stopped: the previous run's cost.
+    EoliaEcoSensorEntityDescription(
+        key="cost_latest",
+        translation_key="cost_latest",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="JPY",
+        value_fn=lambda eco: eco.latest_bill,
+    ),
+    EoliaEcoSensorEntityDescription(
+        key="cost_this_month",
+        translation_key="cost_this_month",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="JPY",
+        value_fn=lambda eco: eco.this_month_bill,
+        # Twelve monthly totals, January first, for the Lovelace/history use.
+        attrs_fn=lambda eco: {
+            "this_year_monthly": list(eco.this_year_bills),
+            "last_year_monthly": list(eco.last_year_bills),
+        },
+    ),
+    EoliaEcoSensorEntityDescription(
+        key="cost_last_month",
+        translation_key="cost_last_month",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="JPY",
+        value_fn=lambda eco: eco.last_month_bill,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: EoliaConfigEntry,
@@ -137,6 +182,12 @@ async def async_setup_entry(
         for description in SENSOR_DESCRIPTIONS
         # The model's own capability flag (unknown flags allow, see coordinator.supports()).
         if coordinator.supports(appliance_id, description.function_id)
+    )
+    eco_coordinator = entry.runtime_data.eco_coordinator
+    async_add_entities(
+        EoliaEcoSensor(eco_coordinator, coordinator, appliance_id, description)
+        for appliance_id in coordinator.devices
+        for description in ECO_SENSOR_DESCRIPTIONS
     )
 
 
@@ -171,3 +222,53 @@ class EoliaSensor(EoliaEntity, SensorEntity):
         if status is None or attrs_fn is None:
             return None
         return attrs_fn(status)
+
+
+class EoliaEcoSensor(CoordinatorEntity[EoliaEcoCoordinator], SensorEntity):
+    """One of Panasonic's estimated electricity-cost figures (yen)."""
+
+    _attr_has_entity_name = True
+    entity_description: EoliaEcoSensorEntityDescription
+
+    def __init__(
+        self,
+        eco_coordinator: EoliaEcoCoordinator,
+        coordinator: EoliaDataUpdateCoordinator,
+        appliance_id: str,
+        description: EoliaEcoSensorEntityDescription,
+    ) -> None:
+        super().__init__(eco_coordinator)
+        self._appliance_id = appliance_id
+        self.entity_description = description
+        self._attr_unique_id = f"{appliance_id}_{description.key}"
+        device = coordinator.devices[appliance_id]
+        # Same identifiers as every other Eolia entity, so this lands on the AC's device.
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, appliance_id)},
+            name=device.nickname,
+            manufacturer="Panasonic",
+            model=device.product_code,
+        )
+
+    @property
+    def _eco(self) -> EoliaEco | None:
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get(self._appliance_id)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._eco is not None
+
+    @property
+    def native_value(self) -> StateType:
+        eco = self._eco
+        return None if eco is None else self.entity_description.value_fn(eco)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        eco = self._eco
+        attrs_fn = self.entity_description.attrs_fn
+        if eco is None or attrs_fn is None:
+            return None
+        return attrs_fn(eco)

@@ -87,7 +87,10 @@ def _setup_sensors(hass, functions):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
-    from custom_components.eolia.coordinator import EoliaDataUpdateCoordinator
+    from custom_components.eolia.coordinator import (
+        EoliaDataUpdateCoordinator,
+        EoliaEcoCoordinator,
+    )
     from custom_components.eolia.models import EoliaDevice
     from custom_components.eolia.sensor import async_setup_entry
 
@@ -99,7 +102,10 @@ def _setup_sensors(hass, functions):
     )
     if functions is not None:
         coordinator.functions[appliance_id] = functions
-    entry = SimpleNamespace(runtime_data=SimpleNamespace(coordinator=coordinator))
+    eco_coordinator = EoliaEcoCoordinator(hass, AsyncMock(), coordinator.devices)
+    entry = SimpleNamespace(
+        runtime_data=SimpleNamespace(coordinator=coordinator, eco_coordinator=eco_coordinator)
+    )
     added = []
 
     async def run():
@@ -132,3 +138,43 @@ async def test_air_quality_sensors_are_created_when_capabilities_are_unknown(has
 def test_only_the_air_quality_sensors_are_capability_gated():
     gated = {d.key: d.function_id for d in SENSOR_DESCRIPTIONS if d.function_id}
     assert gated == {"aq_name": "airquality", "aq_value": "airquality"}
+
+
+def test_eco_sensors_report_yen_from_the_eco_model(eco_current_response, eco_history_response):
+    from homeassistant.components.sensor import SensorDeviceClass
+
+    from custom_components.eolia.models import EoliaEco
+    from custom_components.eolia.sensor import ECO_SENSOR_DESCRIPTIONS
+
+    eco = EoliaEco.from_dicts(eco_current_response, eco_history_response)
+    values = {d.key: d.value_fn(eco) for d in ECO_SENSOR_DESCRIPTIONS}
+    assert values == {"cost_latest": 8, "cost_this_month": 111, "cost_last_month": 1693}
+    for d in ECO_SENSOR_DESCRIPTIONS:
+        assert d.device_class == SensorDeviceClass.MONETARY
+        assert d.native_unit_of_measurement == "JPY"
+        assert d.state_class is None  # an estimate, not a meter: keep it out of statistics
+    attrs = next(d for d in ECO_SENSOR_DESCRIPTIONS if d.key == "cost_this_month").attrs_fn(eco)
+    assert len(attrs["this_year_monthly"]) == 12
+
+
+async def test_eco_sensors_are_created_and_read_from_the_eco_coordinator(
+    hass, eco_current_response, eco_history_response
+):
+    from custom_components.eolia.models import EoliaEco
+
+    run, added = _setup_sensors(hass, None)
+    await run()
+    eco_sensors = {e.entity_description.key: e for e in added if e.entity_description.key.startswith("cost_")}
+    assert set(eco_sensors) == {"cost_latest", "cost_this_month", "cost_last_month"}
+
+    sensor = eco_sensors["cost_this_month"]
+    assert sensor.native_value is None  # nothing polled yet
+    appliance_id = sensor._appliance_id
+    sensor.coordinator.data = {
+        appliance_id: EoliaEco.from_dicts(eco_current_response, eco_history_response)
+    }
+    sensor.coordinator.last_update_success = True
+    assert sensor.native_value == 111
+    assert sensor.available
+    # Same device identifiers as every other Eolia entity -> lands on the AC's device.
+    assert ("eolia", appliance_id) in sensor.device_info["identifiers"]

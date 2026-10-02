@@ -37,6 +37,7 @@ API_BASE_URL = "https://app.rac.apws.panasonic.com/eolia/v6"
 EOLIA_DATE_TIMEZONE = "Asia/Tokyo"
 EOLIA_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
+ECO_SCAN_INTERVAL_SECONDS = 600  # estimated yen amounts move slowly; see docs/findings.md "Eco / cost"
 DEFAULT_SCAN_INTERVAL_SECONDS = 60  # unvalidated guess -- docs/findings.md documents no rate limit
 
 # outside_temp uses this as a sentinel for "no reading available" rather than omitting

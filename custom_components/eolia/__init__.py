@@ -18,7 +18,7 @@ from homeassistant.helpers.typing import ConfigType
 from .api import EoliaApiClient
 from .auth import EoliaAuth
 from .const import CONF_ACCESS_TOKEN, CONF_EXPIRES_AT, CONF_REFRESH_TOKEN, DOMAIN
-from .coordinator import EoliaDataUpdateCoordinator
+from .coordinator import EoliaDataUpdateCoordinator, EoliaEcoCoordinator
 from .exceptions import EoliaApiError, EoliaAuthError
 from .frontend import async_register_card
 
@@ -41,6 +41,7 @@ class EoliaRuntimeData:
 
     api: EoliaApiClient
     coordinator: EoliaDataUpdateCoordinator
+    eco_coordinator: EoliaEcoCoordinator
 
 
 type EoliaConfigEntry = ConfigEntry[EoliaRuntimeData]
@@ -145,7 +146,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: EoliaConfigEntry) -> boo
             coordinator.last_exception,
         )
 
-    entry.runtime_data = EoliaRuntimeData(api=api, coordinator=coordinator)
+    # Estimated yen cost: best-effort, never blocks or fails setup (see EoliaEcoCoordinator).
+    eco_coordinator = EoliaEcoCoordinator(hass, api, coordinator.devices)
+    await eco_coordinator.async_refresh()
+
+    entry.runtime_data = EoliaRuntimeData(
+        api=api, coordinator=coordinator, eco_coordinator=eco_coordinator
+    )
 
     for entity_id in (
         *async_remove_retired_entities(hass, entry),

@@ -117,3 +117,20 @@ def test_custom_settings_to_control_fields_excludes_appliance_id(customsettings_
     assert set(fields) == set(CUSTOM_SETTINGS_REQUEST_FIELDS)
     assert fields["double_mode_temp"] == {"status": True, "high": 28, "low": 23}
     assert fields["peak_cut"] == 100
+
+
+def test_eco_from_real_responses(eco_current_response, eco_history_response):
+    from custom_components.eolia.models import EoliaEco
+
+    eco = EoliaEco.from_dicts(eco_current_response, eco_history_response)
+    assert (eco.latest_bill, eco.this_month_bill, eco.last_month_bill) == (8, 111, 1693)
+    assert len(eco.this_year_bills) == len(eco.last_year_bills) == 12
+    # Last month's total is also September's slot in this year's list.
+    assert eco.this_year_bills[8] == eco.last_month_bill
+
+
+def test_eco_tolerates_missing_fields():
+    from custom_components.eolia.models import EoliaEco
+
+    eco = EoliaEco.from_dicts({}, {})
+    assert eco.latest_bill is None and eco.this_year_bills == ()

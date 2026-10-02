@@ -189,7 +189,10 @@
       "outdoor_temperature": { "name": "Outdoor temperature" },
       "indoor_humidity": { "name": "Indoor humidity" },
       "air_quality": { "name": "Air quality" },
-      "air_quality_value": { "name": "Air quality (raw value)" }
+      "air_quality_value": { "name": "Air quality (raw value)" },
+      "cost_latest": { "name": "Estimated cost: current/last run" },
+      "cost_this_month": { "name": "Estimated cost: this month" },
+      "cost_last_month": { "name": "Estimated cost: last month" }
     },
     "switch": {
       "nanoex": { "name": "nanoeX" },

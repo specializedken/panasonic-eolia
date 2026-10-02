@@ -520,3 +520,15 @@ this repo as a design doc if that plan file isn't available in a future session)
   conditions and templates comparing them to the old names must be updated**. Also added
   `CONFIG_SCHEMA` (hassfest warning), an MIT `LICENSE` (HACS check), `codeowners`, and
   `brand/icon.png`. 315 Python + 67 JS tests. Manifest 0.10.0 (card JS changed).
+
+## 2026-10-02 -- Estimated cost (yen) sensors
+
+Kevin asked about power readings. Findings: the cloud only has Panasonic's *estimated cost in
+yen* (see `docs/findings.md`, "Power/eco history", which also corrects the old paths). Added
+three `monetary`/JPY sensors on the AC's device: `cost_latest` (current/last run),
+`cost_this_month` (with `this_year_monthly` / `last_year_monthly` attributes), `cost_last_month`.
+They come from a separate `EoliaEcoCoordinator` (10 min poll, read-only, never fails setup)
+so these endpoints can't affect control. No `state_class`: an estimate, not a meter. Real kWh
+exists only on ECHONET Lite (`0x85`); Kevin already runs HA's ECHONET integration, so none is
+built here.
+

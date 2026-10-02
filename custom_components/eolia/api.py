@@ -30,7 +30,7 @@ from .exceptions import (
     EoliaDeviceUnreachableError,
     EoliaNetworkError,
 )
-from .models import EoliaCustomSettings, EoliaDevice, EoliaStatus
+from .models import EoliaCustomSettings, EoliaDevice, EoliaEco, EoliaStatus
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,6 +100,13 @@ class EoliaApiClient:
             "PUT", self._custom_settings_path(appliance_id), json_body=payload
         )
         return EoliaCustomSettings.from_dict(data)
+
+    async def async_get_eco(self, appliance_id: str) -> EoliaEco:
+        """GET /devices/{id}/eco/current and /eco/history -- estimated yen cost, read-only."""
+        base = f"/devices/{quote(appliance_id, safe='')}/eco"
+        current = await self._async_request("GET", f"{base}/current")
+        history = await self._async_request("GET", f"{base}/history")
+        return EoliaEco.from_dicts(current, history)
 
     @staticmethod
     def _status_path(appliance_id: str) -> str:

@@ -210,3 +210,31 @@ def _outside_temp(value: Any) -> float | None:
     """
     temp = _optional_float(value)
     return None if temp == OUTSIDE_TEMP_UNAVAILABLE_SENTINEL else temp
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EoliaEco:
+    """Panasonic's *estimated* electricity cost in yen (not a power-meter reading).
+
+    Built from GET /devices/{id}/eco/current and /eco/history, confirmed live 2026-10-02.
+    `latest_bill` is the current run's cost while the unit is running and the previous run's
+    once it has stopped. The yearly lists are twelve monthly totals, January first; months
+    that haven't happened yet are 0.
+    """
+
+    latest_bill: int | None
+    this_month_bill: int | None
+    last_month_bill: int | None
+    this_year_bills: tuple[int, ...]
+    last_year_bills: tuple[int, ...]
+
+    @classmethod
+    def from_dicts(cls, current: dict[str, Any], history: dict[str, Any]) -> Self:
+        """Build from the two raw response bodies."""
+        return cls(
+            latest_bill=current.get("latest_bill"),
+            this_month_bill=current.get("thismonth_bill"),
+            last_month_bill=current.get("lastmonth_bill"),
+            this_year_bills=tuple(history.get("thisyear_bill_list") or ()),
+            last_year_bills=tuple(history.get("lastyear_bill_list") or ()),
+        )

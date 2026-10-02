@@ -343,7 +343,20 @@ path from the listing above live. Only one returned real data:
   `除湿`-labeled sessions all showed `-1.0`; the one `冷房除湿`/`CoolDehumidifying` session
   showed a real range). `bill_list`/`timeoffset`/`outside_temp_list` are parallel time-series
   arrays, roughly 10-minute intervals.
-- **Everything else tried failed** with a new generic error code, **`E-21291-00000`**
+- **Correction (2026-10-02): the bare `/eco/current` and `/eco/history` below were the wrong paths.**
+  The app calls them under `/devices/{id}/`, and they work (read-only, answer while the AC is off):
+  - `GET /devices/{id}/eco/current` -> `{"operation_status", "latest_bill", "thismonth_bill",
+    "lastmonth_bill", "product_month", "device_errstatus"}`. All bills are integer **yen**.
+    `latest_bill` is the current run's cost while running (app label 現在の電気代) and the
+    previous run's once stopped (前回の電気代).
+  - `GET /devices/{id}/eco/history` -> `{"thisyear_bill_list": [12 ints], "lastyear_bill_list":
+    [12 ints]}`, monthly yen totals, **January first**; future months are 0. Last month's total
+    equals its slot in `thisyear_bill_list`.
+  - `GET /beach/card/eco/devices/{id}` -> `{"thismonth_bill"}` only (dashboard card).
+  - Everything is Panasonic's estimate (app text "※電気代は目安です"); the app never shows watts
+    or kWh. The real kWh counter lives on ECHONET Lite (class 0x0130, EPC `0x85`, readable;
+    `0x84` instantaneous power unsupported), LAN-only.
+- **The rest of the originally-tried list failed** with a new generic error code, **`E-21291-00000`**
   ("システムエラーが発生しました" -- system error): `GET /devices/{id}/powermonitor/settings`,
   `GET /eco/current`, `GET /eco/history`, `GET /eco/prediction`, `GET
   /poc/devices/{id}/eco/latest`, `GET /poc/devices/{id}/eco/predictions`, `GET

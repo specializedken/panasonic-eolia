@@ -254,3 +254,16 @@ async def test_set_custom_settings_narrow_range_error(hass, aioclient_mock):
     with pytest.raises(EoliaApiError) as exc_info:
         await client.async_set_custom_settings("APPLIANCE1", {})
     assert exc_info.value.code == "E-21291-02009"
+
+
+async def test_get_eco_reads_current_and_history(
+    hass, aioclient_mock, eco_current_response, eco_history_response
+):
+    aioclient_mock.get(f"{API_BASE_URL}/devices/APPLIANCE1/eco/current", json=eco_current_response)
+    aioclient_mock.get(f"{API_BASE_URL}/devices/APPLIANCE1/eco/history", json=eco_history_response)
+    client = EoliaApiClient(async_get_clientsession(hass), _make_auth())
+
+    eco = await client.async_get_eco("APPLIANCE1")
+
+    assert eco.this_month_bill == 111
+    assert eco.last_year_bills[0] == 301

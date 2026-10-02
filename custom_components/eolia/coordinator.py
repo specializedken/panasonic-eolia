@@ -26,6 +26,7 @@ from .const import (
     AIR_FLOW_CONFLICTING_WITH_SHIELD_HIT,
     AIR_FLOW_UNSUPPORTED_MODES,
     DEFAULT_SCAN_INTERVAL_SECONDS,
+    ECO_SCAN_INTERVAL_SECONDS,
     DOMAIN,
     DOUBLE_MODE_TEMP_HIGH_RANGE,
     DOUBLE_MODE_TEMP_LOW_RANGE,
@@ -47,7 +48,7 @@ from .exceptions import (
     EoliaDeviceUnreachableError,
     EoliaNetworkError,
 )
-from .models import EoliaCustomSettings, EoliaDevice, EoliaStatus
+from .models import EoliaCustomSettings, EoliaDevice, EoliaEco, EoliaStatus
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -730,3 +731,35 @@ class EoliaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, EoliaStatus]]):
                 f"{double_mode_temp!r}). The low/high range is only stored while the "
                 "double-temperature setting is on, and must be at least 5 degrees apart."
             )
+
+
+class EoliaEcoCoordinator(DataUpdateCoordinator[dict[str, EoliaEco]]):
+    """Polls the estimated-cost endpoints, slowly and read-only.
+
+    Separate from the status coordinator on purpose: these endpoints are unrelated to
+    controlling the unit, answer even while it's off, and a failure here must never make the
+    climate/select/number entities unavailable. Never writes anything.
+    """
+
+    def __init__(
+        self, hass: HomeAssistant, api: EoliaApiClient, devices: dict[str, EoliaDevice]
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_eco",
+            update_interval=timedelta(seconds=ECO_SCAN_INTERVAL_SECONDS),
+        )
+        self.api = api
+        self.devices = devices
+
+    async def _async_update_data(self) -> dict[str, EoliaEco]:
+        data: dict[str, EoliaEco] = {}
+        for appliance_id in self.devices:
+            try:
+                data[appliance_id] = await self.api.async_get_eco(appliance_id)
+            except EoliaAuthError as err:
+                raise ConfigEntryAuthFailed(str(err)) from err
+            except EoliaApiError as err:
+                raise UpdateFailed(str(err)) from err
+        return data
