@@ -1,0 +1,208 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "menu_options": {
+          "browser_pkce": "ブラウザでログインする（推奨）",
+          "paste_refresh_token": "リフレッシュトークンを持っている"
+        }
+      },
+      "browser_pkce": {
+        "title": "Panasonic アカウントにログイン",
+        "description": "1. 次のリンクを任意のブラウザで開きます: {authorize_url}\n2. Panasonic ID（Eolia アプリと同じアカウント）でログインします。\n3. ログイン後、ページの読み込みは失敗しますが、**それは想定どおりです**。表示されるエラーは無視してください。\n4. ブラウザの開発者ツールを開き（Windows/Linux は F12、Mac は Cmd+Option+I）、**Network** タブに切り替えます。\n5. 名前が `panasonic-eolia:` で始まるリクエストを探して、クリックします。\n6. 右側のパネルに表示される **Request URL**（`code=...` を含みます）を丸ごとコピーします。\n7. そのURL全体を下に貼り付けます。",
+        "data": {
+          "authorization_response": "貼り付けたURL（またはコードのみ）"
+        }
+      },
+      "paste_refresh_token": {
+        "title": "リフレッシュトークンを入力",
+        "description": "すでに取得済みの refresh_token を貼り付けてください（たとえば、このリポジトリの PKCE ヘルパースクリプトを手動で一度実行して取得したもの）。",
+        "data": {
+          "refresh_token": "リフレッシュトークン"
+        }
+      }
+    },
+    "error": {
+      "invalid_code": "貼り付けた内容に code= の値が見つかりませんでした。開発者ツールに表示された URL 全体、またはコードのみを貼り付けてください。",
+      "code_exchange_failed": "Panasonic がこのコードを受け付けませんでした。有効期限が切れている可能性があります（コードは一度しか使えず、有効期間も短いです）。もう一度ログインリンクからやり直してください。",
+      "invalid_refresh_token": "Panasonic がこのリフレッシュトークンを受け付けませんでした。"
+    },
+    "abort": {
+      "already_configured": "この Panasonic アカウントはすでに設定済みです。",
+      "reauth_successful": "再認証に成功しました。",
+      "cannot_connect": "セットアップを完了するための Eolia API に接続できませんでした。接続を確認して、もう一度お試しください。",
+      "missing_account_id": "Panasonic のログイン応答に必要なアカウント情報が含まれていませんでした。もう一度お試しください。"
+    }
+  },
+  "entity": {
+    "climate": {
+      "eolia": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto": "自動",
+              "cooling": "冷房",
+              "heating": "暖房",
+              "keep_heating": "キープ暖房",
+              "blast": "送風",
+              "nanoe": "送風（ナノイー X）",
+              "dehumidifying": "その他除湿",
+              "cool_dehumidifying": "冷房除湿",
+              "comfortable_dehumidification": "除湿（快適除湿）",
+              "clothes_dryer": "衣類乾燥",
+              "moist_cooling": "しっとり冷房",
+              "auto_temp_control": "おまかせ",
+              "keep_mode": "ダブル温度設定",
+              "smell_care": "においケア",
+              "smell_care_spot": "においケア ねらって脱臭",
+              "nanoex_cleaning": "おでかけクリーン",
+              "cleaning": "おそうじ",
+              "stop": "停止",
+              "other": "その他"
+            }
+          },
+          "fan_mode": {
+            "state": {
+              "0": "自動",
+              "1": "微風",
+              "2": "弱",
+              "3": "中",
+              "4": "強",
+              "5": "最強"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "0": "自動",
+              "1": "上",
+              "2": "やや上",
+              "3": "中",
+              "4": "やや下",
+              "5": "真下",
+              "6": "スイング"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "front": "正面",
+              "spot": "スポット",
+              "wide": "ワイド",
+              "to_left": "左",
+              "nearby_left": "やや左",
+              "nearby_right": "やや右",
+              "to_right": "右",
+              "auto": "自動"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "fan_speed": {
+        "name": "風量",
+        "state": {
+          "0": "自動",
+          "1": "微風",
+          "2": "弱",
+          "3": "中",
+          "4": "強",
+          "5": "最強"
+        }
+      },
+      "vertical_louver": {
+        "name": "上下ルーバー",
+        "state": {
+          "0": "自動",
+          "1": "上",
+          "2": "やや上",
+          "3": "中",
+          "4": "やや下",
+          "5": "真下",
+          "6": "スイング"
+        }
+      },
+      "horizontal_louver": {
+        "name": "左右ルーバー",
+        "state": {
+          "front": "正面",
+          "spot": "スポット",
+          "wide": "ワイド",
+          "to_left": "左",
+          "nearby_left": "やや左",
+          "nearby_right": "やや右",
+          "to_right": "右",
+          "auto": "自動"
+        }
+      },
+      "ai_mode": {
+        "name": "AI モード",
+        "state": {
+          "off": "オフ",
+          "comfortable": "AI 快適",
+          "comfortable_econavi": "AI 快適エコナビ"
+        }
+      },
+      "air_flow": {
+        "name": "気流モード",
+        "state": {
+          "not_set": "標準",
+          "quiet": "しずか",
+          "powerful": "パワフル",
+          "long": "ロング"
+        }
+      },
+      "wind_shield_hit": {
+        "name": "気流の向き",
+        "state": {
+          "not_set": "標準",
+          "shield": "風よけ",
+          "hit": "風あて"
+        }
+      }
+    },
+    "sensor": {
+      "operation_mode": {
+        "name": "運転モード",
+        "state": {
+          "auto": "自動",
+          "cooling": "冷房",
+          "heating": "暖房",
+          "keep_heating": "キープ暖房",
+          "blast": "送風",
+          "nanoe": "送風（ナノイー X）",
+          "dehumidifying": "その他除湿",
+          "cool_dehumidifying": "冷房除湿",
+          "comfortable_dehumidification": "除湿（快適除湿）",
+          "clothes_dryer": "衣類乾燥",
+          "moist_cooling": "しっとり冷房",
+          "auto_temp_control": "おまかせ",
+          "keep_mode": "ダブル温度設定",
+          "smell_care": "においケア",
+          "smell_care_spot": "においケア ねらって脱臭",
+          "nanoex_cleaning": "おでかけクリーン",
+          "cleaning": "おそうじ",
+          "stop": "停止",
+          "other": "その他"
+        }
+      },
+      "indoor_temperature": { "name": "室内温度" },
+      "outdoor_temperature": { "name": "室外温度" },
+      "indoor_humidity": { "name": "室内湿度" },
+      "air_quality": { "name": "空気質" },
+      "air_quality_value": { "name": "空気質（生の値）" },
+      "cost_latest": { "name": "推定電気代: 今回" },
+      "cost_this_month": { "name": "推定電気代: 今月" },
+      "cost_last_month": { "name": "推定電気代: 先月" }
+    },
+    "switch": {
+      "nanoex": { "name": "ナノイー X" },
+      "air_quality_monitor": { "name": "空気質モニタリング" },
+      "silence_control": { "name": "静音モード" }
+    },
+    "number": {
+      "double_temp_low": { "name": "ダブル温度設定: 下限" },
+      "double_temp_high": { "name": "ダブル温度設定: 上限" },
+      "dry_humidity_target": { "name": "除湿の湿度目標" }
+    }
+  }
+}
