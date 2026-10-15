@@ -532,3 +532,13 @@ so these endpoints can't affect control. No `state_class`: an estimate, not a me
 exists only on ECHONET Lite (`0x85`); Kevin already runs HA's ECHONET integration, so none is
 built here.
 
+
+## 2026-10-15 -- Token refresh confirmed live
+
+Checked on europa after three weeks. The config entry was created 2026-09-23 (access token
+`expires_in` 14 days) and `modified_at` is 2026-10-06 05:22 UTC: day 13, i.e. one
+`TOKEN_REFRESH_MARGIN_SECONDS` (24h) before expiry. `expires_at` now reads 2026-10-20 05:22 UTC,
+so the refresh happened on its own and was persisted to the entry, with no reauth prompt. This
+closes the "token refresh after 14 days" gap. Still unknown: the refresh token's own lifetime
+and whether Auth0 rotates it (only the stored fields' types were inspected, never their values).
+If it has a hard cap, the config flow's re-auth path is the fallback.

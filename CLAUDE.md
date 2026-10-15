@@ -123,7 +123,7 @@ Lovelace card are complete and deployed. Open items:
   off" guard still fires -- the card now hides those controls instead), `air_flow`/shield-hit in the clean modes,
   `CoolDehumidifying` through HA (CLI-confirmed only), `KeepHeating` (rejected, no flag
   explains it), Kevin's
-  unexplained 14:06 power-on, token refresh after 14 days,
+  unexplained 14:06 power-on, refresh-token lifetime (the access-token refresh itself is confirmed live, 2026-10-15),
   and multiple devices/models (capability gating is only proven on CS-712DX2-W).
 
 ## How to leave notes for next time
