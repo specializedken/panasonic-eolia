@@ -70,6 +70,15 @@ def _extract_authorization_code(raw: str) -> str | None:
     return None
 
 
+def _extract_state(raw: str) -> str | None:
+    """Return the `state=` value of a pasted redirect URL, or None if there isn't one.
+
+    A bare code (or a URL without state) carries nothing to compare, so the caller accepts it.
+    """
+    states = parse_qs(urlparse(raw.strip()).query).get("state")
+    return states[0] if states else None
+
+
 def _build_title(devices: list[EoliaDevice]) -> str:
     if not devices:
         return "Eolia"
@@ -122,8 +131,12 @@ class EoliaConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             code = _extract_authorization_code(user_input["authorization_response"])
+            pasted_state = _extract_state(user_input["authorization_response"])
             if code is None:
                 errors["base"] = "invalid_code"
+            elif pasted_state is not None and pasted_state != self._state:
+                # A redirect from some other login attempt: don't spend its code here.
+                errors["base"] = "invalid_state"
             else:
                 session = async_get_clientsession(self.hass)
                 try:

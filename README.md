@@ -31,6 +31,9 @@ Eolia は ECHONET Lite でも操作できますが、ECHONET が反映するの�
   扱えません（上記参照）。
 - **以前の Eolia クライアント**（[`panasonic_eolia`](https://github.com/avolmensky/panasonic_eolia)）
   はアーカイブ済みで、すでに動作しません。
+- **洗濯乾燥機向け**（[`ha-panasonic-laundry`](https://github.com/1404423/ha-panasonic-laundry)）
+  は、パナソニックの「スマホで洗濯」アプリ用の姉妹的な連携です。ログイン方式はこのプロジェクトを元に
+  しており、別のアプリ・別のクラウドなので、こちらとは独立して使います。
 
 このインテグレーションには Lovelace カードも同梱されており、モードごとの設定も保持します。
 
@@ -228,6 +231,9 @@ archived and no longer work.
   (see above).
 - **Earlier Eolia clients** ([`panasonic_eolia`](https://github.com/avolmensky/panasonic_eolia)) are
   archived and no longer work.
+- **Washer-dryers**: [`ha-panasonic-laundry`](https://github.com/1404423/ha-panasonic-laundry) is a
+  sibling integration for Panasonic's "スマホで洗濯" app. Its login is adapted from this project;
+  it is a different app on a different cloud, so the two are used independently.
 
 This integration also ships a Lovelace card and keeps per-mode settings.
 

@@ -24,6 +24,7 @@
     },
     "error": {
       "invalid_code": "Couldn't find a code= value in what you pasted. Paste the full URL DevTools showed you, or just the code by itself.",
+      "invalid_state": "That redirect URL belongs to a different login attempt. Open the login link shown below again, log in, and paste the URL from that attempt.",
       "code_exchange_failed": "Panasonic rejected that code -- it may have expired (they're single-use and short-lived). Try the login link again.",
       "invalid_refresh_token": "Panasonic rejected that refresh token."
     },
