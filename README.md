@@ -9,7 +9,7 @@ Home Assistant カスタムインテグレーションと Lovelace カードで�
 ## なぜ作ったか
 
 Eolia は ECHONET Lite でも操作できますが、ECHONET が反映するのは状態のごく一部だけです。
-**AI モード / ECONAVI**、**nanoeX**、気流の向きの制御（人を避ける／人に当てる）、そして
+**AI モード / エコナビ（ECONAVI）**、**ナノイー X（nanoeX）**、気流の向きの制御（風よけ／風あて）、そして
 **除湿（快適除湿）** と **冷房除湿** の区別は ECHONET では取得できません。これらはアプリが使う
 クラウド API にしかないため、このインテグレーションはそれを利用しています。API は Android アプリの
 解析によって調べたものです（[`docs/findings.md`](docs/findings.md) を参照）。この API 向けの
@@ -41,7 +41,7 @@ Eolia は ECHONET Lite でも操作できますが、ECHONET が反映するの�
 | プラットフォーム | エンティティ |
 |---|---|
 | `climate` | オン/オフ、目標温度（16–30 °C、0.5 度刻み）、風量、上下・左右のルーバー、そして**全モード**をプリセットとして提供: Auto、Dry、Cooling、Cool & Dehumidify、Moist Cooling、Heating、Double temperature、Clothes drying、Odor care、Away clean、Self-clean、Fan only（お使いの機種が対応するモードのみ表示されます） |
-| `select` | AI モード（オフ / AI コンフォート / AI コンフォート + ECONAVI）、気流モード（標準 / 静か / パワフル / ロングリーチ）、気流の向き（標準 / 人を避ける / 人に当てる）、風量、上下ルーバー、左右ルーバー |
+| `select` | AI モード（オフ / AI 快適 / AI 快適エコナビ）、気流モード（標準 / しずか / パワフル / ロング）、気流の向き（標準 / 風よけ / 風あて）、風量、上下ルーバー、左右ルーバー |
 | `number` | Dry の湿度目標（50–60 %、5 % 刻み）、Double temperature の下限・上限 |
 | `sensor` | 運転モード（エアコン本体が報告する、変換前のモード）、室内温度、室内湿度、室外温度 |
 | `switch` | nanoeX、静音モード |
