@@ -40,7 +40,7 @@ Eolia は ECHONET Lite でも操作できますが、ECHONET が反映するの�
 
 | プラットフォーム | エンティティ |
 |---|---|
-| `climate` | オン/オフ、目標温度（16–30 °C、0.5 度刻み）、風量、上下・左右のルーバー、そして**全モード**をプリセットとして提供: Auto、Dry、Cooling、Cool & Dehumidify、Moist Cooling、Heating、Double temperature、Clothes drying、Odor care、Away clean、Self-clean、Fan only（お使いの機種が対応するモードのみ表示されます） |
+| `climate` | オン/オフ、目標温度（16–30 °C、0.5 度刻み）、風量、上下・左右のルーバー、そして**全モード**をプリセットとして提供: Auto（自動）、Dry（除湿）、Cooling（冷房）、Cool & Dehumidify（冷房除湿）、Moist Cooling（しっとり冷房）、Heating（暖房）、Double temperature（ダブル温度設定）、Clothes drying（衣類乾燥）、Odor care（においケア）、Away clean（おでかけクリーン）、Self-clean（おそうじ）、Fan only（送風）。括弧内はアプリでの表記です（お使いの機種が対応するモードのみ表示されます） |
 | `select` | AI モード（オフ / AI 快適 / AI 快適エコナビ）、気流モード（標準 / しずか / パワフル / ロング）、気流の向き（標準 / 風よけ / 風あて）、風量、上下ルーバー、左右ルーバー |
 | `number` | Dry の湿度目標（50–60 %、5 % 刻み）、Double temperature の下限・上限 |
 | `sensor` | 運転モード（エアコン本体が報告する、変換前のモード）、室内温度、室内湿度、室外温度 |
